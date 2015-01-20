@@ -196,17 +196,20 @@ float interpolateNoise( float y )
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
 */
-int perlinNoise( float y )
+float perlinNoise( float y )
 {
-	int total = 0, i, frequency, amplitude;
-	float persistence = 1/2;
+	int i;
+	float total = 0.0;
+	float persistence = 0.5;
+	float frequency, amplitude;
 	int numOfOctaves = 6 - 1;
 	
 	for( i = 0; i < numOfOctaves; i++ )
 	{
 		frequency = 2 * i;
 		amplitude = persistence * i;
-		
+
+		printf("total: %lf\n",total);
 		total = total + interpolateNoise(y * frequency) * amplitude;
 	}
 	
@@ -270,7 +273,7 @@ int i, j, k;
 	   TODO: Create World
 	*/
 	
-	int randomNoise;
+	float randomNoise;
 	
 	/* Initialize the world as empty */
       for(i = 0; i < WORLDX; i++)
@@ -283,9 +286,9 @@ int i, j, k;
       for(i = 0; i < WORLDX; i++) {
          for(j = 0; j < WORLDZ; j++) {
          
-         	randomNoise = perlinNoise(6.0); // random number for testing
-         	printf("Perlin Noise returned:%d\n", randomNoise); 
-            world[i][randomNoise][j] = 3;
+         	randomNoise = perlinNoise(100.0); // random number for testing
+         	printf("randomNoise:%lf\n",randomNoise); 
+            world[i][24][j] = 3;
          }
       }
                
