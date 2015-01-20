@@ -139,13 +139,79 @@ float *la;
       if (mob1ry > 360.0) mob1ry -= 360.0;
     /* end testworld animation */
    } else {
-
 	/* your code goes here */
 
    }
 }
 
+/* Logic taken from:
+   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
+*/
+float noise( int y )
+{
+	/* preform a left-shift for 13 followed by a bitwise XOR */
+	y = (y << 13) ^ y;
+	
+	/* return a floating point number between between -1.0 and 1.0 */
+	return ( 1.0 - ( (y * (y * y * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0); 
+}
 
+/* Logic taken from:
+   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
+*/
+float smoothNoise( float y )
+{
+	/* smooth the surface */
+	return noise(y)/2  +  noise(y-1)/4  +  noise(y+1)/4;
+}
+
+/* Logic taken from:
+   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
+*/
+float linear_Interpolate( float a, float b, float y )
+{
+	return a*(1-y) + b*y;
+}
+
+/* Logic taken from:
+   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
+*/
+float interpolateNoise( float y )
+{	
+	float a, b, fractional_y;
+	int y_int;
+	
+	/* convert float to int */
+	y_int = (int)y;
+	
+	/* create a fractional of y */
+	fractional_y = y - y_int;
+	
+	a = smoothNoise(y_int);
+	b = smoothNoise(y_int + 1);
+	
+	return linear_Interpolate(a, b, fractional_y);
+}
+
+/* Logic taken from:
+   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
+*/
+int perlinNoise( float y )
+{
+	int total = 0, i, frequency, amplitude;
+	float persistence = 1/2;
+	int numOfOctaves = 6 - 1;
+	
+	for( i = 0; i < numOfOctaves; i++ )
+	{
+		frequency = 2 * i;
+		amplitude = persistence * i;
+		
+		total = total + interpolateNoise(y * frequency) * amplitude;
+	}
+	
+	return total;
+}
 
 int main(int argc, char** argv)
 {
@@ -199,7 +265,33 @@ int i, j, k;
       createPlayer(0, 52.0, 27.0, 52.0, 0.0);
 
    } else {
-
+	/* TODO: Make Noise function
+	   TODO: Make Interpolated Noise function
+	   TODO: Create World
+	*/
+	
+	int randomNoise;
+	
+	/* Initialize the world as empty */
+      for(i = 0; i < WORLDX; i++)
+         for(j = 0; j < WORLDY; j++)
+            for(k = 0; k < WORLDZ; k++)
+               world[i][j][k] = 0;
+               
+    /* Make random noise to create platforms */
+	/* build a red platform */
+      for(i = 0; i < WORLDX; i++) {
+         for(j = 0; j < WORLDZ; j++) {
+         
+         	randomNoise = perlinNoise(6.0); // random number for testing
+         	printf("Perlin Noise returned:%d\n", randomNoise); 
+            world[i][randomNoise][j] = 3;
+         }
+      }
+               
+    
+	/* Start creating world by creating random noise */
+	
 	/* your code to build the world goes here */
 
    }
