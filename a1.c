@@ -75,7 +75,33 @@ extern void tree(float, float, float, float, float, float, int);
 	   will be the negative value of the array indices */
 void collisionResponse() {
 
-	/* your collision code goes here */
+/*	/* your collision code goes here *
+	float x_cord;
+	float y_cord;
+	float z_cord;
+	
+	getViewPosition(&x_cord, &y_cord, &z_cord);
+	
+	x_cord = x_cord * -1;
+	y_cord = y_cord * -1;
+	z_cord = z_cord * -1;
+	printf("x:%lf, y:%lf. z:%lf\n",x_cord, y_cord, z_cord);
+	printf("x:%d, y:%d, z:%d\n",(int)x_cord, (int)y_cord, (int)z_cord);
+	if( world[(int)x_cord][(int)y_cord][(int)z_cord] == 0 ){
+		printf("safe\n");
+	}
+	else{
+		getOldViewPosition(&x_cord, &y_cord, &z_cord);
+		setViewPosition(x_cord, y_cord, z_cord);
+		printf("not safe\n");
+	} */
+	
+	
+	
+/*	extern void setViewPosition(float, float, float);
+extern void getViewPosition(float *, float *, float *);
+extern void getOldViewPosition(float *, float *, float *);
+extern void getViewOrientation(float *, float *, float *);*/
 
 }
 
@@ -176,7 +202,7 @@ float smoothNoise( float x, float z )
 */
 float linear_Interpolate( float a, float b, float axis )
 {
-	return a * (1-axis) + b * axis;
+	return a * (1.0 - axis) + b * axis;
 }
 
 /* Logic taken from:
@@ -217,18 +243,69 @@ float perlinNoise( float x, float z )
 	float total = 0.0;
 	float persistence = 0.25;
 	float frequency, amplitude;
-	int numOfOctaves = 6 - 1;
+	int numOfOctaves = 30 - 1;
 	
 	for( i = 0; i < numOfOctaves; i++ )
 	{
-		frequency = 2 * i;
-		amplitude = persistence * i;
+		frequency = pow(2,i);
+		amplitude = pow(persistence,i);
 
 		total = total + interpolateNoise(x * frequency, z * frequency) * amplitude;
 	}
 	
 	return total;
 }
+
+
+/* Logic take from:
+   http://en.wikipedia.org/wiki/Perlin_noise
+*/
+// Computes the dot product of the distance and gradient vectors.
+float dotGridGradient(int ix, int iy, float x, float y) {
+ 
+     // Precomputed (or otherwise) gradient vectors at each grid point X,Y
+     extern float Gradient[3][3][2];
+ 
+     // Compute the distance vector
+     float dx = x - (double)ix;
+     float dy = y - (double)iy;
+ 
+     // Compute the dot-product
+     return (dx*Gradient[iy][ix][0] + dy*Gradient[iy][ix][1]);
+ } 
+
+/* Logic take from:
+   http://en.wikipedia.org/wiki/Perlin_noise
+*/
+// Compute Perlin noise at coordinates x, y
+float perlin(float x, float y) {
+ 
+     // Determine grid cell coordinates
+     int x0 = (x > 0.0 ? (int)x : (int)x - 1);
+     int x1 = x0 + 1;
+     int y0 = (y > 0.0 ? (int)y : (int)y - 1);
+     int y1 = y0 + 1;
+ 
+     // Determine interpolation weights
+     // Could also use higher order polynomial/s-curve here
+     float sx = x - (double)x0;
+     float sy = y - (double)y0;
+ 
+     // Interpolate between grid point gradients
+     float n0, n1, ix0, ix1, value;
+     n0 = dotGridGradient(x0, y0, x, y);
+     n1 = dotGridGradient(x1, y0, x, y);
+     ix0 = linear_Interpolate(n0, n1, sx);
+     n0 = dotGridGradient(x0, y1, x, y);
+     n1 = dotGridGradient(x1, y1, x, y);
+     ix1 = linear_Interpolate(n0, n1, sx);
+     value = linear_Interpolate(ix0, ix1, sy);
+ 
+     return value;
+ }
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -300,41 +377,57 @@ int i, j, k, m, n, l;
          for(j = 0; j < WORLDZ; j++) {
          	for(k = 0; k < 5; k++) {
          		/* make sure ground is only 5 cubes deep */
-         		world[i][k][j] = 3;
+         		world[i][k][j] = 1;
          	}
          }
     }
                
-    /* Make random noise to create platforms */
-	/* build a red platform */
-      for(i = 0; i < WORLDX; i = i++) {
-         for(j = 0; j < WORLDZ; j = j++) {
+	  /* Create world using Perlin noise algo */
+      for(i = 0; i < WORLDX; i = i = i + 1) {
+         for(j = 0; j < WORLDZ; j = j + 1) {
          
-         	randomNoise = perlinNoise(i,j); // random number for testing
+         	randomNoise = perlin(i,j); // random number for testing
          	
+         	printf("perlin Noise results: %lf\n", randomNoise);
          	float converter;
          	
          	if( randomNoise > 0.00000 ){
-         		printf("randomNoise:%lf\n",randomNoise); 
+         		
+         		/* convert the noise to be out of 100 */
          		converter = randomNoise * 100;
+         		
+         		/* limit the scope of the terrain */
          		if(converter > 5.00000 && converter < 25.00000 ){
-         			printf("converted:%lf\n",converter); 
+					
+					/* convert double to int */
          			int converter_int = (int)converter;
-         			printf("int: %d\n",converter_int);
-         			world[i][converter_int][j] = 3;
+					
+					/* add random altitude block */
+         			world[i][converter_int][j] = 5;
          			
+         			/* fill in the gaps below the cube */
          			for( l = 5; l < converter_int; l++ )
          			{
-         				world[i][l][j] = 3;
+         				world[i][l][j] = 4;
          			}
+
+         			/*while( 5 < converter_int ){
+         			
+         				world[i+1][converter_int][j] = 4;
+         				world[i-1][converter_int][j] = 4;
+         				world[i][converter_int][j+1] = 4;
+         				world[i][converter_int][j-1] = 4;
+         				
+         				converter_int --;
+         			}*/
          		}
          	}
-            //world[i][5][j] = 3;
          }
       }
+      
+      /* create sample player */
+      //createPlayer(0, 52.0, 27.0, 52.0, 0.0);
                
-    
-	/* Start creating world by creating random noise */
 	
 	/* your code to build the world goes here */
 
