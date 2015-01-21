@@ -147,60 +147,75 @@ float *la;
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
 */
-float noise( int y )
+float noise( int x, int z )
 {
+	int dimension2 = x + z * 57;
+	
 	/* preform a left-shift for 13 followed by a bitwise XOR */
-	y = (y << 13) ^ y;
+	dimension2 = (dimension2 << 13) ^ dimension2;
 	
 	/* return a floating point number between between -1.0 and 1.0 */
-	return ( 1.0 - ( (y * (y * y * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0); 
+	return ( 1.0 - ( (dimension2 * (dimension2 * dimension2 * 15731 + 789221) 
+	         + 1376312589) & 0x7fffffff) / 1073741824.0); 
 }
 
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
 */
-float smoothNoise( float y )
+float smoothNoise( float x, float z )
 {
-	/* smooth the surface */
-	return noise(y)/2  +  noise(y-1)/4  +  noise(y+1)/4;
+	/* smooth the surface (corners, sides and center) */
+	float corners = ( noise( x-1, z-1 ) + noise( x+1, z-1 ) + noise( x-1, z+1 ) + noise( x+1, z+1 ) ) / 16;
+    float sides   = ( noise( x-1, z ) + noise( x+1, z ) + noise( x, z-1 ) + noise( x, z+1 ) ) /  8;
+    float center  = noise( x, z ) / 4;
+    return corners + sides + center;
 }
 
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
 */
-float linear_Interpolate( float a, float b, float y )
+float linear_Interpolate( float a, float b, float axis )
 {
-	return a*(1-y) + b*y;
+	return a * (1-axis) + b * axis;
 }
 
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
 */
-float interpolateNoise( float y )
+float interpolateNoise( float x, float z )
 {	
-	float a, b, fractional_y;
-	int y_int;
+	float vect1, vect2, vect3, vect4, fractional_x, fractional_z;
+	float interpolate1, interpolate2;
+	int x_int, z_int;
 	
-	/* convert float to int */
-	y_int = (int)y;
+	/* convert floats to ints */
+	x_int = (int)x;
+	z_int = (int)z;
 	
 	/* create a fractional of y */
-	fractional_y = y - y_int;
+	fractional_x = x - x_int;
+	fractional_z = z - z_int;
 	
-	a = smoothNoise(y_int);
-	b = smoothNoise(y_int + 1);
+	/* smooth surfaces */
+	vect1 = smoothNoise( x_int, z_int );
+	vect2 = smoothNoise( x_int + 1, z_int );
+	vect3 = smoothNoise( x_int, z_int + 1 );
+	vect4 = smoothNoise( x_int + 1, z_int + 1 );
 	
-	return linear_Interpolate(a, b, fractional_y);
+	interpolate1 = linear_Interpolate( vect1, vect2, fractional_x );
+	interpolate2 = linear_Interpolate( vect3, vect4, fractional_x );
+	
+	return linear_Interpolate( interpolate1, interpolate2, fractional_z );
 }
 
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
 */
-float perlinNoise( float y )
+float perlinNoise( float x, float z )
 {
 	int i;
 	float total = 0.0;
-	float persistence = 0.5;
+	float persistence = 0.25;
 	float frequency, amplitude;
 	int numOfOctaves = 6 - 1;
 	
@@ -209,8 +224,7 @@ float perlinNoise( float y )
 		frequency = 2 * i;
 		amplitude = persistence * i;
 
-		printf("total: %lf\n",total);
-		total = total + interpolateNoise(y * frequency) * amplitude;
+		total = total + interpolateNoise(x * frequency, z * frequency) * amplitude;
 	}
 	
 	return total;
@@ -218,7 +232,7 @@ float perlinNoise( float y )
 
 int main(int argc, char** argv)
 {
-int i, j, k;
+int i, j, k, m, n, l;
 	/* initialize the graphics system */
    graphicsInit(&argc, argv);
 
@@ -281,14 +295,41 @@ int i, j, k;
             for(k = 0; k < WORLDZ; k++)
                world[i][j][k] = 0;
                
+    /* Create the ground */
+    for(i = 0; i < WORLDX; i++) {
+         for(j = 0; j < WORLDZ; j++) {
+         	for(k = 0; k < 5; k++) {
+         		/* make sure ground is only 5 cubes deep */
+         		world[i][k][j] = 3;
+         	}
+         }
+    }
+               
     /* Make random noise to create platforms */
 	/* build a red platform */
-      for(i = 0; i < WORLDX; i++) {
-         for(j = 0; j < WORLDZ; j++) {
+      for(i = 0; i < WORLDX; i = i++) {
+         for(j = 0; j < WORLDZ; j = j++) {
          
-         	randomNoise = perlinNoise(100.0); // random number for testing
-         	printf("randomNoise:%lf\n",randomNoise); 
-            world[i][24][j] = 3;
+         	randomNoise = perlinNoise(i,j); // random number for testing
+         	
+         	float converter;
+         	
+         	if( randomNoise > 0.00000 ){
+         		printf("randomNoise:%lf\n",randomNoise); 
+         		converter = randomNoise * 100;
+         		if(converter > 5.00000 && converter < 25.00000 ){
+         			printf("converted:%lf\n",converter); 
+         			int converter_int = (int)converter;
+         			printf("int: %d\n",converter_int);
+         			world[i][converter_int][j] = 3;
+         			
+         			for( l = 5; l < converter_int; l++ )
+         			{
+         				world[i][l][j] = 3;
+         			}
+         		}
+         	}
+            //world[i][5][j] = 3;
          }
       }
                
