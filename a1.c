@@ -118,13 +118,13 @@ void collisionResponse() {
 	/*  system is running */
 	/* -gravity must also implemented here, duplicate collisionResponse */
 void update() {
-  int i, j, k;
-  float *la;
+  int i, j;
   float x_cord;
   float y_cord;
   float z_cord;
-  int initial = 0;
   static int fallSlow = 0;
+  static int cloudx = 1, cloudz = 1;
+  static int cloudx2 = 10, cloudz2 = 1;
 
   int x, y, z;
 
@@ -183,32 +183,57 @@ void update() {
 
      /**************************************************************************/
     /* clouds */
-  /*  for ( i = 1; i < WORLDX; i++ ){
-      for ( j = 1; j < WORLDZ; j++){
         
-        world[i-1][35][j-1] = world[i][35][j];
-        world[i][35][j] = world[i+1][35][j+1];
+        if ( fallSlow%20 == 0 )
+        {
+        	/* cloud1 */
+        	/* when it reaches the end of the map restart the cloud */
+        	if( cloudx == 99 && cloudz == 99 ){
+        	
+        		world[cloudx-1][35][cloudz-1] = 0;
+        		world[cloudx][35][cloudz-1] = 0;
+        		world[cloudx][35][cloudz] = 0;
+        		
+        		cloudx = 1;
+        		cloudz = 1;
+        	}
+        	
+        	world[cloudx][35][cloudz] = 5;
+        	world[cloudx+1][35][cloudz] = 5;
+        	world[cloudx+1][35][cloudz+1] = 5;
+        	
+        	
+        	world[cloudx-1][35][cloudz-1] = 0;
+        	world[cloudx][35][cloudz-1] = 0;
 
-      }
-    }*/
+        	cloudx++;
+        	cloudz++;
+        	
+        	
+        	/*cloud 2*/
+        	/* when it reaches the end of the map restart the cloud */
+        /*	if( cloudx == 99 && cloudz == 99 ){
+        	
+        		world[cloudx2-1][35][cloudz2-1] = 0;
+        		world[cloudx2][35][cloudz2-1] = 0;
+        		world[cloudx2][35][cloudz2] = 0;
+        		
+        		cloudx = 1;
+        		cloudz = 1;
+        	}
+        	
+        	world[cloudx2][35][cloudz2] = 5;
+        	world[cloudx2+1][35][cloudz2] = 5;
+        	world[cloudx2+1][35][cloudz2+1] = 5;
+        	
+        	
+        	world[cloudx2-1][35][cloudz2-1] = 0;
+        	world[cloudx2][35][cloudz2-1] = 0;
 
-    static float mob0x = 50.0, mob0y = 15.0, mob0z = 52.0;
-    static float mob0ry = 0.0;
-    static int increasingmob0 = 1;
+        	cloudz2++;*/
 
-    /* move mob 0 and rotate */
-    /* set mob 0 position */
-    setMobPosition(0, mob0x, mob0y, mob0z, mob0ry);
-
-    /* move mob 0 in the x axis */
-    if (increasingmob0 == 1)
-       mob0x += 0.2;
-    else 
-       mob0x -= 0.2;
-    if (mob0x > 50) increasingmob0 = 0;
-    if (mob0x < 30) increasingmob0 = 1;
-    /******************************************************************************/
-
+        	
+        }
 
     /* get the initial position */
     getViewPosition(&x_cord, &y_cord, &z_cord);
@@ -321,7 +346,7 @@ float perlinNoise( float x, float z )
 
 int main(int argc, char** argv)
 {
-int i, j, k, m, n, l;
+int i, j, k, l;
 	/* initialize the graphics system */
    graphicsInit(&argc, argv);
 
@@ -380,10 +405,15 @@ int i, j, k, m, n, l;
 	
 	/* Initialize the world as empty */
       for(i = 0; i < WORLDX; i++)
+      {
          for(j = 0; j < WORLDY; j++)
+         {
             for(k = 0; k < WORLDZ; k++)
+            {
                world[i][j][k] = 0;
-               
+            }
+         } 
+      } 
     /* Create the ground */
     for(i = 0; i < WORLDX; i++) {
          for(j = 0; j < WORLDZ; j++) {
@@ -395,8 +425,8 @@ int i, j, k, m, n, l;
     }
                
 	  /* Create world using Perlin noise algo */
-      for(i = 0; i < WORLDX; i = i = i + 1) {
-         for(j = 0; j < WORLDZ; j = j + 1) {
+      for(i = 0; i < WORLDX; i++) {
+         for(j = 0; j < WORLDZ; j++) {
          
          	randomNoise = perlinNoise(i,j); // random number for testing
          	
@@ -417,24 +447,9 @@ int i, j, k, m, n, l;
           }
         }
       }
+      
 
-      /* creating clouds */
-      world[35][35][35] = 5;
-      world[36][35][36] = 5;
-      world[37][35][37] = 5;
-      world[35][35][36] = 5;
-      world[37][35][35] = 5;
-      world[35][35][37] = 5;
-
-      /* creating clouds */
-      world[75][35][75] = 5;
-      world[76][35][76] = 5;
-      world[77][35][77] = 5;
-      world[75][35][76] = 5;
-      world[77][35][75] = 5;
-      world[75][35][77] = 5;
-
-      createMob(0, 50.0, 25.0, 52.0, 0.0);
+      //createMob(0, 50.0, 25.0, 52.0, 0.0);
       
       /* create sample player */
       //createPlayer(0, 52.0, 27.0, 52.0, 0.0);
