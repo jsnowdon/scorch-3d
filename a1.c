@@ -118,14 +118,14 @@ void collisionResponse() {
 	/*  system is running */
 	/* -gravity must also implemented here, duplicate collisionResponse */
 void update() {
-  int i, j;
+
   float x_cord;
   float y_cord;
   float z_cord;
   static int fallSlow = 0;
   static int cloudx = 1, cloudz = 1;
   static int cloudx2 = 10, cloudz2 = 1;
-   static int cloudx3 = 99, cloudz3 = 30;
+   static int cloudx3 = 98, cloudz3 = 30;
 
   int x, y, z;
 
@@ -184,7 +184,7 @@ void update() {
 
      /********************** CLOUDS *******************************************/
      
-        if ( fallSlow%5 == 0 ) //20
+        if ( fallSlow%5 == 0 ) 
         {
         	/* cloud1 */
         	/* when it reaches the end of the map restart the cloud */
@@ -225,7 +225,7 @@ void update() {
         	
         	world[cloudx2][35][cloudz2-1] = 0;
 
-        	cloudz2++;
+        	cloudz2++; 
 
           /*cloud 3*/
           /* when it reaches the end of the map restart the cloud */
@@ -234,7 +234,7 @@ void update() {
             world[cloudx3+1][35][cloudz3] = 0;
             world[cloudx3][35][cloudz3] = 0;
             
-            cloudx3 = 99;
+            cloudx3 = 98;
           }
           
           world[cloudx3][35][cloudz3] = 5;
@@ -243,7 +243,7 @@ void update() {
           
           world[cloudx3+1][35][cloudz3] = 0;
 
-          cloudx3--;
+          cloudx3--; 
         }
 
         /*********** GRAVITY AND COLISION DETECTION *******************/
@@ -444,7 +444,7 @@ int i, j, k, l;
 
               world[i][intepolateInt][j] = 1;
          			
-     			    /* fill in the gaps below the cube */
+     		   /* fill in the gaps below the cube */
               if(intepolateInt > 3)
               {
      		         for( l = 3; l < intepolateInt; l++ )
