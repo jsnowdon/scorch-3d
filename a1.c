@@ -104,7 +104,7 @@ void collisionResponse() {
   }
 
   /* apply gravity */
-  if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlowAgain%10 == 0){
+  if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlowAgain%5 == 0){
       setViewPosition(x_cord, y_cord + 1, z_cord );
   }
 
@@ -224,7 +224,7 @@ void update() {
    // printf("%d, %d, %d\n", x, y, z);
 
     /* apply gravity */
-    if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%10 == 0 ){
+    if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0 ){
       setViewPosition(x_cord, y_cord + 1, z_cord );
     }
     
