@@ -125,6 +125,7 @@ void update() {
   static int fallSlow = 0;
   static int cloudx = 1, cloudz = 1;
   static int cloudx2 = 10, cloudz2 = 1;
+   static int cloudx3 = 99, cloudz3 = 30;
 
   int x, y, z;
 
@@ -177,14 +178,13 @@ void update() {
       mob1ry += 1.0;
       if (mob1ry > 360.0) mob1ry -= 360.0;
     /* end testworld animation */
-   } else {
-	/* your code goes here */
+   } 
+   else
+    {
 
-
-     /**************************************************************************/
-    /* clouds */
-        
-        if ( fallSlow%20 == 0 )
+     /********************** CLOUDS *******************************************/
+     
+        if ( fallSlow%5 == 0 ) //20
         {
         	/* cloud1 */
         	/* when it reaches the end of the map restart the cloud */
@@ -212,51 +212,64 @@ void update() {
         	
         	/*cloud 2*/
         	/* when it reaches the end of the map restart the cloud */
-        /*	if( cloudx == 99 && cloudz == 99 ){
+        	if( cloudz2 == 99 && cloudx2 == 99 ){
         	
-        		world[cloudx2-1][35][cloudz2-1] = 0;
         		world[cloudx2][35][cloudz2-1] = 0;
-        		world[cloudx2][35][cloudz2] = 0;
         		
-        		cloudx = 1;
-        		cloudz = 1;
+        		cloudz2 = 1;
         	}
         	
         	world[cloudx2][35][cloudz2] = 5;
-        	world[cloudx2+1][35][cloudz2] = 5;
-        	world[cloudx2+1][35][cloudz2+1] = 5;
+        	world[cloudx2][35][cloudz2+1] = 5;
         	
         	
-        	world[cloudx2-1][35][cloudz2-1] = 0;
         	world[cloudx2][35][cloudz2-1] = 0;
 
-        	cloudz2++;*/
+        	cloudz2++;
 
-        	
+          /*cloud 3*/
+          /* when it reaches the end of the map restart the cloud */
+          if( cloudx3 == 1 ){
+          
+            world[cloudx3+1][35][cloudz3] = 0;
+            world[cloudx3][35][cloudz3] = 0;
+            
+            cloudx3 = 99;
+          }
+          
+          world[cloudx3][35][cloudz3] = 5;
+          world[cloudx3-1][35][cloudz3] = 5;
+          
+          
+          world[cloudx3+1][35][cloudz3] = 0;
+
+          cloudx3--;
         }
 
-    /* get the initial position */
-    getViewPosition(&x_cord, &y_cord, &z_cord);
+        /*********** GRAVITY AND COLISION DETECTION *******************/
 
-    x = (int)x_cord;
-    y = (int)y_cord;
-    z = (int)z_cord;
+        /* get the initial position */
+        getViewPosition(&x_cord, &y_cord, &z_cord);
 
-    x = x * -1;
-    y = y * -1;
-    z = z * -1;
+        x = (int)x_cord;
+        y = (int)y_cord;
+        z = (int)z_cord;
 
-   // printf("%d, %d, %d\n", x, y, z);
+        /* make numbers positive */
+        x = x * -1;
+        y = y * -1;
+        z = z * -1;
 
-    /* apply gravity */
-    if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0 ){
-      setViewPosition(x_cord, y_cord + 1, z_cord );
-    }
+        /* apply gravity */
+        if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0 ){
+            setViewPosition(x_cord, y_cord + 1, z_cord );
+        }
     
-    fallSlow++;
-
+        fallSlow++;
    }
 }
+
+/**** PERLIN NOISE FUNCTONS ****/
 
 /* Logic taken from:
    http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
@@ -395,15 +408,13 @@ int i, j, k, l;
 	/* create sample player */
       createPlayer(0, 52.0, 27.0, 52.0, 0.0);
 
-   } else {
-	/* TODO: Make Noise function
-	   TODO: Make Interpolated Noise function
-	   TODO: Create World
-	*/
+   } 
+   else 
+   {
 	
-	float randomNoise;
+      float randomNoise;
 	
-	/* Initialize the world as empty */
+	    /* Initialize the world as empty */
       for(i = 0; i < WORLDX; i++)
       {
          for(j = 0; j < WORLDY; j++)
@@ -413,52 +424,38 @@ int i, j, k, l;
                world[i][j][k] = 0;
             }
          } 
-      } 
-    /* Create the ground */
-    for(i = 0; i < WORLDX; i++) {
-         for(j = 0; j < WORLDZ; j++) {
-         //	for(k = 0; k < 5; k++) {
-         		/* make sure ground is only 5 cubes deep */
-         		world[i][3][j] = 8;
-         //	}
-         }
-    }
-               
-	  /* Create world using Perlin noise algo */
-      for(i = 0; i < WORLDX; i++) {
-         for(j = 0; j < WORLDZ; j++) {
-         
-         	randomNoise = perlinNoise(i,j); // random number for testing
-         	
-         //	printf("perlin Noise results: %lf\n", (randomNoise+1) * 25);
-
-          int intepolateInt = (int) ((randomNoise+1) * 7);
-
-          //printf("int: %d\n", intepolateInt);
-
-          world[i][intepolateInt][j] = 1;
-         			
-     			/* fill in the gaps below the cube */
-          if(intepolateInt > 3){
-     		     for( l = 3; l < intepolateInt; l++ )
-     			    {
-     				     world[i][l][j] = 1;
-     			    }
-          }
-        }
       }
-      
 
-      //createMob(0, 50.0, 25.0, 52.0, 0.0);
-      
-      /* create sample player */
-      //createPlayer(0, 52.0, 27.0, 52.0, 0.0);
+      /* Create the ground */
+      for(i = 0; i < WORLDX; i++) {
+          for(j = 0; j < WORLDZ; j++) {
+         		world[i][3][j] = 8;
+         }
+      }
                
-	
-	/* your code to build the world goes here */
+	    /* Create world using Perlin noise algo */
+      for(i = 0; i < WORLDX; i++) 
+      {
+          for(j = 0; j < WORLDZ; j++)
+          {
+         	    randomNoise = perlinNoise(i,j); // random number for testing
+
+              int intepolateInt = (int) ((randomNoise+1) * 7);
+
+              world[i][intepolateInt][j] = 1;
+         			
+     			    /* fill in the gaps below the cube */
+              if(intepolateInt > 3)
+              {
+     		         for( l = 3; l < intepolateInt; l++ )
+     			       {
+     				         world[i][l][j] = 1;
+     			        }
+              }
+          }
+      }
 
    }
-
 
 	/* starts the graphics processing loop */
 	/* code after this will not run until the program exits */
