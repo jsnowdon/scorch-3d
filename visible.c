@@ -348,12 +348,24 @@ int i, j, k;
               for(k=bz; k<tz+1; k++) {
                  if ((i<WORLDX) && (j<WORLDY) && (k<WORLDZ) && (i>-1) && (j>-1) && (k>-1))
                     if ( (world[i][j][k] != 0) &&
-                        (CubeInFrustum(i+0.5, j+0.5, k+0.5, 0.5))  )
+                        (CubeInFrustum(i+0.5, j+0.5, k+0.5, 0.5))  ) {
 				/* check for six neighbours */
-                       if ( (world[i+1][j][k] == 0) || (world[i-1][j][k] ==0) 
-                       || (world[i][j+1][k] == 0) || (world[i][j-1][k] ==0) 
-                       || (world[i][j][k+1] == 0) || (world[i][j][k-1] ==0) )
-                       addDisplayList(i, j, k);
+				/* if cube is not on the outer edge and is not*/
+				/*   surrounded by 6 neighbours then draw it */
+				/* else if the cube is an outside cube then */
+				/*    always draw it */
+                       if ( (i > 0) && (i < WORLDX-1) &&
+                            (j > 0) && (j < WORLDY-1) &&
+                            (k > 0) && (k < WORLDZ-1) && 
+                         ((world[i+1][j][k] == 0) || (world[i-1][j][k] == 0) 
+                         || (world[i][j+1][k] == 0) || (world[i][j-1][k] == 0) 
+                         || (world[i][j][k+1] == 0) || (world[i][j][k-1] == 0)))
+                             addDisplayList(i, j, k);
+                       else if ( (i == 0) || (i == WORLDX-1) ||
+                                 (j == 0) || (j == WORLDY-1) ||
+                                 (k == 0) || (k == WORLDZ-1) ) 
+                               addDisplayList(i, j, k);
+                 }
               }
    } else {
 		/* calculate centre of new cube */

@@ -49,6 +49,8 @@ In the sample world created using the -testworld flag there are a few
 sample boxes and animations drawn in the middle of the world. There is also
 a set of blue boxes which show the outer width and depth of the world.
 
+The f key toggles fly mode but only when gravity has been implemented.
+
 
 Programming Interface to the Graphics System
 --------------------------------------------
@@ -135,7 +137,7 @@ void collisionResponse()
 -Note that the f key can turn off the effect of gravity. It will
  only work once you have gravity implemented. If you press f it will allow
  you to fly around the world and look at it from above. Pressing f again
- togles gravity back on.
+ toggles gravity back on.
 
 
 Timing Events
@@ -189,8 +191,52 @@ so you will be need to merge your changes into the new code.
 
 
 ========================================
-End of Assignment 1 Instructions
+Additions and Changes for Assignment 2
+--------------------------------------
+
+Mob Controls
+------------
+The following functions have been added to control the creation and
+movement of the mobs:
+
+   void createMob(int number, float x, float y, float z, float roty);
+        -creates mob number at position x,y,z with rotation y
+   void setMobPosition(int number, float x, float y, float z, float roty);
+        -move a created mob to a new position and rotation
+   void hideMob(int number);
+        -stops drawing mob number, it become invisible
+	-making mobs invisible is equivalent to removing them from the world
+   void showmob(int number);
+        -start drawing mob number, make it visible again
+
+In all of the above functions:
+number  -is the identifier for each mob. There can be a maximum of 10
+         mobs in the game. They are numbered from 0 to 9 and this number
+         is passed to all functions to indicate which mob you are updating.
+x,y,z   -are the x,y,z coordinates in the world space. They are floats.
+         These are world coordinates.
+roty    -is the rotation of the mob around the y axis. This allows you
+         to position the mob so it is facing in the direction it is
+         moving or looking. It is a float.
+
+A small sample of the mob control is included in a1.c. 
+To see this demo you need to run the sample world using:
+	./a1 -testworld
+
+
+Access to the Mouse Operations
+------------------------------
+The mouse() function added to a1.c. It allows you to respond to
+mouse button events.
+
+
+
+
+
 ========================================
+End of Assignment 2 Instructions
+========================================
+
 
 IMPORTANT NOTE
 --------------
@@ -261,67 +307,6 @@ a viewpoint in OpenGL. There is also some useful code there.
 ========================================
 Additions and Changes for Assignment 3
 --------------------------------------
-
-Mob Controls
-------------
-The following functions have been added to control the creation and
-movement of the mobs:
-
-   void createMob(int number, float x, float y, float z, float roty);
-        -creates mob number at position x,y,z with rotation y
-   void setMobPosition(int number, float x, float y, float z, float roty);
-        -move a created mob to a new position and rotation
-   void hideMob(int number);
-        -stops drawing mob number, it become invisible
-	-making mobs invisible is equivalent to removing them from the world
-   void showmob(int number);
-        -start drawing mob number, make it visible again
-
-In all of the above functions:
-number  -is the identifier for each mob. There can be a maximum of 10
-         mobs in the game. They are numbered from 0 to 9 and this number
-         is passed to all functions to indicate which mob you are updating.
-x,y,z   -are the x,y,z coordinates in the world space. They are floats.
-         These are world coordinates.
-roty    -is the rotation of the mob around the y axis. This allows you
-         to position the mob so it is facing in the direction it is
-         moving or looking. It is a float.
-
-A small sample of the mob control is included in a3.c. You can remove
-this and replace it with your own code. To see this demo you need to
-run the sample world using:
-	./a3 -testworld -drawall
-You can move around in the test world after pressing he f key.
-
-
-Mouse Orientation
------------------
-This was added in assignment 2 but may be useful now.
-
-void getViewOrientation(float *xaxis, float *yaxis, float *zaxis);
--Returns the direction the mouse is pointing.
--The xaxis and yaxis values are the amount of rotation around the
- x and y axis respectively.
--The zaxis value will always be zero.
--The values can be larger then 360 degrees which indicates more than
- one rotation. You can return them to the range of 0 to 360 using fmodf().
-
-Dig Flag
---------
-A flag has been created which will be set to 1 when the user presses
-the space bar. This is used to indicate that the user wants to
-remove the block which they are facing. You need to reset the flag to 0
-once you have used it. The flag is:
-	int dig;
-A message is printed when the space bar is pressed. This message is
-in a3.c and can be removed in your assignment.
-
-Lighting
---------
-Lighting has been modified to display cubes more clearly. There is now a
-light which moves with the viewpoint and it should show the local objects
-more clearly.
-
 
 
 Frames Per Second (FPS) Printing

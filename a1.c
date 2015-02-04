@@ -10,8 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #include "graphics.h"
+
+	/* mouse function called by GLUT when a button is pressed or released */
+void mouse(int, int, int, int);
 
 	/* initialize graphics library */
 extern void graphicsInit(int *, char **);
@@ -45,9 +49,6 @@ extern void showPlayer(int);
 extern int flycontrol;
 	/* flag used to indicate that the test world should be used */
 extern int testWorld;
-	/* list and count of polygons to be displayed, set during culling */
-extern int displayList[MAX_DISPLAY_LIST][3];
-extern int displayCount;
 	/* flag to print out frames per second */
 extern int fps;
 	/* flag to indicate removal of cube the viewer is facing */
@@ -75,40 +76,48 @@ extern void tree(float, float, float, float, float, float, int);
 	   will be the negative value of the array indices */
 void collisionResponse() {
 
-	/* your collision code goes here */
-	float x_cord;
-	float y_cord;
-	float z_cord;
-	static int fallSlowAgain = 0;
+   float x_cord;
+   float y_cord;
+   float z_cord;
+   static int fallSlowAgain = 0;
 
-  int x, y, z;
+   int x, y, z;
 
-  /* get the initial position */
-  getViewPosition(&x_cord, &y_cord, &z_cord);
+   /* get the initial position */
+   getViewPosition(&x_cord, &y_cord, &z_cord);
 
-  x = (int)x_cord;
-  y = (int)y_cord;
-  z = (int)z_cord;
+   /*convert the cordinates to positive integers */
+   x = (int)x_cord * -1;
+   y = (int)y_cord * -1;
+   z = (int)z_cord * -1;
 
-  x = x * -1;
-  y = y * -1;
-  z = z * -1;
+   /* ensure we are on the map */
+   if ( x < 2 || x > 98 || y < 4 || y > 47 || z < 2 || z > 98 )
+   {
+        getOldViewPosition(&x_cord, &y_cord, &z_cord);
+        setViewPosition(x_cord, y_cord, z_cord );
+   }
 
-  if( world[x][y][z] != 0 ){
+   /* allow for climbing 1 block if needed */
+   if( world[x][y][z] != 0 )
+   {
+      if( world[x][y+1][z] == 0 )
+      {
+          setViewPosition(x_cord, y_cord - 0.5, z_cord );
+      }
+      else
+      {
+          getOldViewPosition(&x_cord, &y_cord, &z_cord);
+          setViewPosition(x_cord, y_cord, z_cord );
+      }
+   }
 
-    if( world[x][y+1][z] == 0){
-      setViewPosition(x_cord, y_cord-1, z_cord );
-    }
-    getOldViewPosition(&x_cord, &y_cord, &z_cord);
-    setViewPosition(x_cord, y_cord, z_cord );
-  }
-
-  /* apply gravity */
-  if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlowAgain%5 == 0){
+   /* apply gravity */
+   if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlowAgain%5 == 0){
       setViewPosition(x_cord, y_cord + 1, z_cord );
-  }
+   }
 
-	fallSlowAgain++;
+   fallSlowAgain++;
 }
 
 
@@ -119,15 +128,16 @@ void collisionResponse() {
 	/* -gravity must also implemented here, duplicate collisionResponse */
 void update() {
 
+  int i, j, k, x, y, z;
+  float *la;
   float x_cord;
   float y_cord;
   float z_cord;
   static int fallSlow = 0;
   static int cloudx = 1, cloudz = 1;
   static int cloudx2 = 10, cloudz2 = 1;
-   static int cloudx3 = 98, cloudz3 = 30;
+  static int cloudx3 = 98, cloudz3 = 30;
 
-  int x, y, z;
 
 	/* sample animation for the test world, don't remove this code */
 	/* -demo of animating mobs */
@@ -179,183 +189,186 @@ void update() {
       if (mob1ry > 360.0) mob1ry -= 360.0;
     /* end testworld animation */
    } 
-   else
-    {
+   else 
+   {
 
-     /********************** CLOUDS *******************************************/
-     
-        if ( fallSlow%5 == 0 ) 
-        {
-        	/* cloud1 */
-        	/* when it reaches the end of the map restart the cloud */
-        	if( cloudx == 99 && cloudz == 99 ){
-        	
-        		world[cloudx-1][35][cloudz-1] = 0;
-        		world[cloudx][35][cloudz-1] = 0;
-        		world[cloudx][35][cloudz] = 0;
-        		
-        		cloudx = 1;
-        		cloudz = 1;
-        	}
-        	
-        	world[cloudx][35][cloudz] = 5;
-        	world[cloudx+1][35][cloudz] = 5;
-        	world[cloudx+1][35][cloudz+1] = 5;
-        	
-        	
-        	world[cloudx-1][35][cloudz-1] = 0;
-        	world[cloudx][35][cloudz-1] = 0;
+      /********************** CLOUDS *******************************************/
+      if ( fallSlow%5 == 0 ) 
+      {
+         /* cloud1 */
+         /* when it reaches the end of the map restart the cloud */
+         if( cloudx == 99 && cloudz == 99 )
+         {
+            world[cloudx-1][48][cloudz-1] = 0;
+            world[cloudx][48][cloudz-1] = 0;
+            world[cloudx][48][cloudz] = 0;
+            
+            cloudx = 1;
+            cloudz = 1;
+         }
+         
+         /* create cloud at new position */
+         world[cloudx][48][cloudz] = 5;
+         world[cloudx+1][48][cloudz] = 5;
+         world[cloudx+1][48][cloudz+1] = 5;
+         
+         /* erase cloud from old position */
+         world[cloudx-1][48][cloudz-1] = 0;
+         world[cloudx][48][cloudz-1] = 0;
 
-        	cloudx++;
-        	cloudz++;
-        	
-        	
-        	/*cloud 2*/
-        	/* when it reaches the end of the map restart the cloud */
-        	if( cloudz2 == 99 && cloudx2 == 99 ){
-        	
-        		world[cloudx2][35][cloudz2-1] = 0;
-        		
-        		cloudz2 = 1;
-        	}
-        	
-        	world[cloudx2][35][cloudz2] = 5;
-        	world[cloudx2][35][cloudz2+1] = 5;
-        	
-        	
-        	world[cloudx2][35][cloudz2-1] = 0;
+         cloudx++;
+         cloudz++;
+         
+         
+         /*cloud 2*/
+         /* when it reaches the end of the map restart the cloud */
+         if( cloudz2 == 99 && cloudx2 == 99 )
+         {
+            world[cloudx2][48][cloudz2-1] = 0;
+            
+            cloudz2 = 1;
+         }
+         
+         /* create cloud at new position */
+         world[cloudx2][48][cloudz2] = 5;
+         world[cloudx2][48][cloudz2+1] = 5;
+         
+         /* erase cloud from old position */
+         world[cloudx2][48][cloudz2-1] = 0;
 
-        	cloudz2++; 
+         cloudz2++; 
 
           /*cloud 3*/
           /* when it reaches the end of the map restart the cloud */
-          if( cloudx3 == 1 ){
+          if( cloudx3 == 1 )
+          {
           
-            world[cloudx3+1][35][cloudz3] = 0;
-            world[cloudx3][35][cloudz3] = 0;
+            world[cloudx3+1][48][cloudz3] = 0;
+            world[cloudx3][48][cloudz3] = 0;
             
             cloudx3 = 98;
           }
           
-          world[cloudx3][35][cloudz3] = 5;
-          world[cloudx3-1][35][cloudz3] = 5;
+          /* create cloud at new position */
+          world[cloudx3][48][cloudz3] = 5;
+          world[cloudx3-1][48][cloudz3] = 5;
           
-          
-          world[cloudx3+1][35][cloudz3] = 0;
+          /* erase cloud from old position */
+          world[cloudx3+1][48][cloudz3] = 0;
 
           cloudx3--; 
-        }
+      }
 
-        /*********** GRAVITY AND COLISION DETECTION *******************/
+      /*********** GRAVITY AND COLISION DETECTION *******************/
 
-        /* get the initial position */
-        getViewPosition(&x_cord, &y_cord, &z_cord);
+      /* get the initial position */
+      getViewPosition(&x_cord, &y_cord, &z_cord);
 
-        x = (int)x_cord;
-        y = (int)y_cord;
-        z = (int)z_cord;
+      /* convert the cordinates to positive integers */
+      x = (int)x_cord * -1;
+      y = (int)y_cord * -1;
+      z = (int)z_cord * -1;
 
-        /* make numbers positive */
-        x = x * -1;
-        y = y * -1;
-        z = z * -1;
+      /* apply gravity */
+      if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0){
+         setViewPosition(x_cord, y_cord + 1, z_cord );
+      }
 
-        /* apply gravity */
-        if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0 ){
-            setViewPosition(x_cord, y_cord + 1, z_cord );
-        }
-    
-        fallSlow++;
+      fallSlow++;
+
    }
 }
 
+
+	/* called by GLUT when a mouse button is pressed or released */
+	/* -button indicates which button was pressed or released */
+	/* -state indicates a button down or button up event */
+	/* -x,y are the screen coordinates when the mouse is pressed or */
+	/*  released */ 
+void mouse(int button, int state, int x, int y) {
+
+   if (button == GLUT_LEFT_BUTTON)
+      printf("left button - ");
+   else if (button == GLUT_MIDDLE_BUTTON)
+      printf("middle button - ");
+   else
+      printf("right button - ");
+
+   if (state == GLUT_UP)
+      printf("up - ");
+   else
+      printf("down - ");
+
+   printf("%d %d\n", x, y);
+}
+
 /**** PERLIN NOISE FUNCTONS ****/
+/* Algoritm taken from: http://lodev.org/cgtutor/randomnoise.html#3D_Random_Noise */
+#define noiseWidth 30  
+#define noiseHeight 30
+#define noiseDepth 30
 
-/* Logic taken from:
-   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
-*/
-float noise( int x, int z )
+double noise[noiseWidth][noiseHeight][noiseDepth]; //the noise array
+
+void generateNoise()
 {
-	int dimension2 = x + z * 57;
-	
-	/* preform a left-shift for 13 followed by a bitwise XOR */
-	dimension2 = (dimension2 << 13) ^ dimension2;
-	
-	/* return a floating point number between between -1.0 and 1.0 */
-	return ( 1.0 - ( (dimension2 * (dimension2 * dimension2 * 15731 + 789221) 
-	         + 1376312589) & 0x7fffffff) / 1073741824.0); 
+    int x, y, z;
+
+    for( x = 0; x < noiseWidth; x++)
+    for( y = 0; y < noiseHeight; y++)
+    for( z = 0; z < noiseDepth; z++)
+    {
+        noise[x][y][z] = (rand() % 32768) / 32768.0;
+    }
 }
 
-/* Logic taken from:
-   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
-*/
-float smoothNoise( float x, float z )
+double smoothNoise(double x, double y, double z)
+{ 
+    //get fractional part of x and y
+    double fractX = x - (int)x;
+    double fractY = y - (int)y;
+    double fractZ = z - (int)z;   
+  
+    //wrap around
+    int x1 = ((int)x + noiseWidth) % noiseWidth;
+    int y1 = ((int)y + noiseHeight) % noiseHeight;
+    int z1 = ((int)z + noiseDepth) % noiseDepth;
+  
+    //neighbor values
+    int x2 = (x1 + noiseWidth - 1) % noiseWidth;
+    int y2 = (y1 + noiseHeight - 1) % noiseHeight;
+    int z2 = (z1 + noiseDepth - 1) % noiseDepth;
+
+    //smooth the noise with bilinear interpolation
+    double value = 0.0;
+    value += fractX       * fractY       * fractZ       * noise[x1][y1][z1];
+    value += fractX       * (1 - fractY) * fractZ       * noise[x1][y2][z1];
+    value += (1 - fractX) * fractY       * fractZ       * noise[x2][y1][z1];
+    value += (1 - fractX) * (1 - fractY) * fractZ       * noise[x2][y2][z1];
+
+    value += fractX       * fractY       * (1 - fractZ) * noise[x1][y1][z2];
+    value += fractX       * (1 - fractY) * (1 - fractZ) * noise[x1][y2][z2];
+    value += (1 - fractX) * fractY       * (1 - fractZ) * noise[x2][y1][z2];
+    value += (1 - fractX) * (1 - fractY) * (1 - fractZ) * noise[x2][y2][z2];
+
+    return value;
+}
+
+double turbulence(double x, double y, double z, double size)
 {
-	/* smooth the surface (corners, sides and center) */
-	float corners = ( noise( x-1, z-1 ) + noise( x+1, z-1 ) + noise( x-1, z+1 ) + noise( x+1, z+1 ) ) / 16;
-    float sides   = ( noise( x-1, z ) + noise( x+1, z ) + noise( x, z-1 ) + noise( x, z+1 ) ) /  8;
-    float center  = noise( x, z ) / 4;
-    return corners + sides + center;
+    double value = 0.0, initialSize = size;
+   
+    while(size >= 1)
+    {
+        value += smoothNoise(x / size, y / size, z / size) * size;
+        size /= 2.0;
+    }
+   
+    return(128.0 * value / initialSize);
 }
+/********* End of Perlin Noise Functions *****************/
 
-/* Logic taken from:
-   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
-*/
-float linear_Interpolate( float a, float b, float axis )
-{
-	return a * (1.0 - axis) + b * axis;
-}
 
-/* Logic taken from:
-   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
-*/
-float interpolateNoise( float x, float z )
-{	
-	float vect1, vect2, vect3, vect4, fractional_x, fractional_z;
-	float interpolate1, interpolate2;
-	int x_int, z_int;
-	
-	/* convert floats to ints */
-	x_int = (int)x;
-	z_int = (int)z;
-	
-	/* create a fractional of y */
-	fractional_x = x - x_int;
-	fractional_z = z - z_int;
-	
-	/* smooth surfaces */
-	vect1 = smoothNoise( x_int, z_int );
-	vect2 = smoothNoise( x_int + 1, z_int );
-	vect3 = smoothNoise( x_int, z_int + 1 );
-	vect4 = smoothNoise( x_int + 1, z_int + 1 );
-	
-	interpolate1 = linear_Interpolate( vect1, vect2, fractional_x );
-	interpolate2 = linear_Interpolate( vect3, vect4, fractional_x );
-	
-	return linear_Interpolate( interpolate1, interpolate2, fractional_z );
-}
-
-/* Logic taken from:
-   http://freespace.virgin.net/hugo.elias/models/m_perlin.htm
-*/
-float perlinNoise( float x, float z )
-{
-	int i;
-	float total = 0.0;
-	float persistence = 0.25;
-	float frequency, amplitude;
-	int numOfOctaves = 30 - 1;
-	
-	for( i = 0; i < numOfOctaves; i++ )
-	{
-		frequency = pow(2,i);
-		amplitude = pow(persistence,i);
-
-		total = total + interpolateNoise(x * frequency, z * frequency) * amplitude;
-	}
-	
-	return total;
-}
 
 int main(int argc, char** argv)
 {
@@ -375,7 +388,7 @@ int i, j, k, l;
          for(j=0; j<WORLDY; j++)
             for(k=0; k<WORLDZ; k++)
                world[i][j][k] = 0;
-	
+
 	/* some sample objects */
 	/* build a red platform */
       for(i=0; i<WORLDX; i++) {
@@ -408,13 +421,13 @@ int i, j, k, l;
 	/* create sample player */
       createPlayer(0, 52.0, 27.0, 52.0, 0.0);
 
-   } 
-   else 
-   {
-	
+  } 
+  /* code for world */
+  else
+  {
       float randomNoise;
-	
-	    /* Initialize the world as empty */
+   
+      /* Initialize the world as empty */
       for(i = 0; i < WORLDX; i++)
       {
          for(j = 0; j < WORLDY; j++)
@@ -429,33 +442,54 @@ int i, j, k, l;
       /* Create the ground */
       for(i = 0; i < WORLDX; i++) {
           for(j = 0; j < WORLDZ; j++) {
-         		world[i][3][j] = 8;
+               world[i][3][j] = 8;
          }
       }
+
+      /* create some random noise */
+      generateNoise();
+    
+      uint noiseReturn;
+      double t;
+      time_t now;
+      int x, y;
                
-	    /* Create world using Perlin noise algo */
+      /* Create world using Perlin noise algo */
       for(i = 0; i < WORLDX; i++) 
       {
+          now = time(0);
+
           for(j = 0; j < WORLDZ; j++)
           {
-         	    randomNoise = perlinNoise(i,j); // random number for testing
+              /* create the noise for the landscape */
+              noiseReturn = (uint)(turbulence(i, j, t, 32) / 4) - 13;
 
-              int intepolateInt = (int) ((randomNoise+1) * 7);
-
-              world[i][intepolateInt][j] = 1;
-         			
-     		   /* fill in the gaps below the cube */
-              if(intepolateInt > 3)
+              /* make sure no mountains touch any clouds */
+              if(noiseReturn >= 48)
               {
-     		         for( l = 3; l < intepolateInt; l++ )
-     			       {
-     				         world[i][l][j] = 1;
-     			        }
+                  noiseReturn = 47;
               }
+
+              /* populate the world */
+              world[i][noiseReturn][j] = 1;
+              
+              /* fill in the gaps below the cube */
+              if(noiseReturn > 3)
+              {
+                  for( l = 3; l < noiseReturn; l++ )
+                  {
+                      world[i][l][j] = 1;
+                  }
+              }
+
+              /* get the time */
+              t = now / 40.0;
           }
       }
 
+
    }
+
 
 	/* starts the graphics processing loop */
 	/* code after this will not run until the program exits */

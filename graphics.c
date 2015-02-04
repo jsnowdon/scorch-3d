@@ -16,6 +16,7 @@
 extern void update();
 extern void collisionResponse();
 extern void buildDisplayList();
+extern void mouse(int, int, int, int);
 
 
 	/* flags used to control the appearance of the image */
@@ -373,8 +374,8 @@ int i, j, k;
    glRotatef(mvy, 0.0, 1.0, 0.0);
 	/* Subtract 0.5 to raise viewpoint slightly above objects. */
 	/* Gives the impression of a head on top of a body. */
-//   glTranslatef(vpx, vpy - 0.5, vpz);
-   glTranslatef(vpx, vpy, vpz);
+   glTranslatef(vpx, vpy - 0.5, vpz);
+//   glTranslatef(vpx, vpy, vpz);
 
 
 	/* set viewpoint light position */
@@ -655,24 +656,6 @@ static float oldx, oldy;
 
 }
 
-void mouse(int button, int state, int x, int y) {
-/* capture mouse button events - not currently used */
-/*
-   if (button == GLUT_LEFT_BUTTON)
-      printf("left button - ");
-   else if (button == GLUT_MIDDLE_BUTTON)
-      printf("middle button - ");
-   else
-      printf("right button - ");
-
-   if (state == GLUT_UP)
-      printf("up - ");
-   else
-      printf("down - ");
-
-   printf("%d %d\n", x, y);
-*/
-}
 
 
 	/* initilize graphics information and mob data structure */
