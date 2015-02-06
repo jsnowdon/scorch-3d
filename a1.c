@@ -306,11 +306,6 @@ void update() {
 
       }
 
-      if ( fallSlow%100 == 0 ){
-          printf("velocity: %lf\n", velocity );
-          printf("angle:%lf\n", angle );
-      }
-
       for ( i = 0; i < 5; i++)
       {
           if( bullet[i].drawMob == 1)
@@ -381,43 +376,45 @@ void update() {
 
 void MouseMotion(int x, int y)
 {
-  static int initialY;
-  static int initialX;
-  static int firstCall = 0;
+  	static int initialY;
+  	static int initialX;
+  	static int firstCall = 0;
 
-  /* Prepare for next click */
-  if ( reset == 1 ){
-    firstCall = 0;
-    reset = 0;
-  }
+  	/* Prepare for next click */
+  	if ( reset == 1 ){
+    	firstCall = 0;
+    	reset = 0;
+  	}
 
-  /* only keep the inital value */
-  if ( firstCall == 0 ){
-      initialY = y;
-      initialX = x;
-      firstCall++;
-  }
+  	/* only keep the inital value */
+  	if ( firstCall == 0 ){
+    	initialY = y;
+      	initialX = x;
+      	firstCall++;
+  	}
+  	
+  	if( rightButton == 1 ){
 
-  if( rightButton == 1 && x < initialX && velocity >= 0.005 && velocity <= 1.00 ){
-    velocity = velocity - 0.005;
-    //printf("left:%lf m/s\n", velocity);
-  }
+  		if( x < initialX && velocity >= 0.005 && velocity <= 1.00 ){
+    		velocity = velocity - 0.005;
+    		printf("left:%lf m/s\n", velocity );
+  		}
 
-  else if( rightButton == 1 && x > initialX && velocity <= 0.995 && velocity >= 0.00 ){
-    velocity = velocity + 0.005;
-    //printf("right:%lf m/s\n", velocity );
-  }
+  		else if( x > initialX && velocity <= 0.995 && velocity >= 0.00 ){
+    		velocity = velocity + 0.005;
+    		printf("right:%lf m/s\n", velocity );
+  		}
 
-  else if( rightButton == 1 && y < initialY && angle <= 89.00 && angle >= 0.00 ){
-    angle = angle + 1.0;
-    //printf("up:%lf degrees\n", angle);
-  }
+  		else if( y < initialY && angle <= 89.00 && angle >= 0.00 ){
+    		angle = angle + 1.0;
+    		printf("up:%lf degrees\n", angle);
+  		}
 
-  else if( rightButton == 1 && y > initialY && angle >= 1.00 && angle <= 90.00 ){
-    angle = angle - 1.0;
-    //printf("down:%lf degrees\n", angle );
-  }
-
+  		else if( y > initialY && angle >= 1.00 && angle <= 90.00 ){
+    		angle = angle - 1.0;
+    		printf("down:%lf degrees\n", angle );
+  		}
+  	}
 }
 
 	/* called by GLUT when a mouse button is pressed or released */
@@ -484,17 +481,12 @@ void mouse(int button, int state, int x, int y) {
         reset = 1;
       }
 
-
-   /*   while( button == GLUT_RIGHT_BUTTON && state == GLUT_RIGHT && velocity <= 1.0f ){
-          velocity = velocity + 0.05f;
-      }*/
-
-      if (state == GLUT_UP)
+  /*    if (state == GLUT_UP)
           printf("up - ");
       else
           printf("down - ");
 
-      printf("%d %d\n", x, y);
+      printf("%d %d\n", x, y); */
     }
 
     /* increment number of mobs created */
@@ -651,7 +643,7 @@ int i, j, k, l;
       /* create some random noise */
       generateNoise();
     
-      uint noiseReturn;
+      int noiseReturn;
       double t;
       time_t now;
       int x, y;
@@ -664,7 +656,7 @@ int i, j, k, l;
           for(j = 0; j < WORLDZ; j++)
           {
               /* create the noise for the landscape */
-              noiseReturn = (uint)(turbulence(i, j, t, 32) / 4) - 13;
+              noiseReturn = (int)(turbulence(i, j, t, 32) / 4) - 13;
 
               /* make sure no mountains touch any clouds */
               if(noiseReturn >= 48)
