@@ -17,6 +17,7 @@ extern void update();
 extern void collisionResponse();
 extern void buildDisplayList();
 extern void mouse(int, int, int, int);
+extern void draw2D();
 
 
 	/* flags used to control the appearance of the image */
@@ -36,6 +37,9 @@ float oldvpx, oldvpy, oldvpz;
 	/* mouse direction coordiates */
 float mvx = 0.0, mvy = 45.0, mvz = 0.0;
 
+	/* stores current mouse position value */
+float oldx, oldy;
+
 	/* location for the light source (the sun), the first three
 	   values are the x,y,z coordinates */
 GLfloat lightPosition[] = {0.0, 49.0, 0.0, 0.0};
@@ -44,6 +48,10 @@ GLfloat viewpointLight[] = {-50.0, -50.0, -50.0, 1.0};
 
 	/* sky cube size */
 float skySize;
+
+	/* screen dimensions */
+int screenWidth = 1024;
+int screenHeight = 768;
 
 	/* command line flags */
 int flycontrol = 1;		// allow viewpoint to move in y axis when 1
@@ -69,6 +77,14 @@ short playerVisible[MOB_COUNT];
 
 	/* flag indicating the user wants the cube in front of them removed */
 int dig = 0;
+        /* flag indicates if map is to be printed */
+int displayMap = 1;
+
+	/* functions draw 2D images */
+void  draw2Dline(int, int, int, int, int);
+void  draw2Dbox(int, int, int, int);
+void  draw2Dtriangle(int, int, int, int, int, int);
+void  set2Dcolour(float []);
 
 /***************/
 
@@ -226,6 +242,13 @@ void getOldViewPosition(float *x, float *y, float *z) {
    *z = oldvpz;
 }
 
+	/* sets the current orientation of the viewpoint */
+void setViewOrientation(float xaxis, float yaxis, float zaxis) {
+   mvx = xaxis;
+   mvy = yaxis;
+   mvz = zaxis;
+}
+
 	/* returns the current orientation of the viewpoint */
 void getViewOrientation(float *xaxis, float *yaxis, float *zaxis) {
    *xaxis = mvx;
@@ -372,6 +395,7 @@ int i, j, k;
    glLoadIdentity();
    glRotatef(mvx, 1.0, 0.0, 0.0);
    glRotatef(mvy, 0.0, 1.0, 0.0);
+   glRotatef(mvz, 0.0, 0.0, 1.0);
 	/* Subtract 0.5 to raise viewpoint slightly above objects. */
 	/* Gives the impression of a head on top of a body. */
    glTranslatef(vpx, vpy - 0.5, vpz);
@@ -483,7 +507,36 @@ int i, j, k;
       }
    }
 
+
+
+	/* 2D drawing section used to create interface components */
+	/* change to orthographic mode to display 2D images */
+   glMatrixMode (GL_PROJECTION);
+   glPushMatrix();
+   glLoadIdentity ();
+   gluOrtho2D(0, screenWidth, 0, screenHeight);
+   glMatrixMode (GL_MODELVIEW);
+   glLoadIdentity ();
+
+	/* turn on alpha blending for 2D */
+   glEnable(GL_BLEND);
+   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+   glShadeModel(GL_FLAT);
+   glNormal3f(0.0, 0.0, -1.0);
+
+	/* call user's 2D drawing function */
+   draw2D();
+
+	/* reset graphics for 3D drawing */
+   glDisable(GL_BLEND);
+
+   glMatrixMode (GL_PROJECTION);
    glPopMatrix();
+
+   glMatrixMode (GL_MODELVIEW);
+   glPopMatrix();
+	/* end 2d display code */
+
    glutSwapBuffers();
 }
 
@@ -497,6 +550,10 @@ void reshape(int w, int h)
    gluPerspective(45.0, (GLfloat)w/(GLfloat)h, 0.1, skySize);
    glMatrixMode (GL_MODELVIEW);
    glLoadIdentity ();
+	/* set global screen width and height */
+   screenWidth = w;
+   screenHeight = h;
+
 }
 
 	/* respond to keyboard events */
@@ -605,6 +662,11 @@ static int lighton = 1;
       case ' ':		// toggle dig flag, used to indicate user wants to dig
          dig = 1;
          break;
+      case 'm':		// toggle map display, 0=none, 1=small, 2=large
+         displayMap++;
+         if (displayMap > 2)
+            displayMap = 0;
+         break;
    }
 }
 
@@ -646,14 +708,20 @@ int  red, green, blue;
    fclose(fp);
 }
 
+	/* responds to mouse movement when a button is pressed */
 void motion(int x, int y) {
-static float oldx, oldy;
+	/* update current mouse movement but don't use to change the viewpoint*/
+   oldx = x;
+   oldy = y;
+}
+
+	/* responds to mouse movement when a button is not pressed */
+void passivemotion(int x, int y) {
    mvx += (float) y - oldy;
    mvy += (float) x - oldx;
    oldx = x;
    oldy = y;
    glutPostRedisplay();
-
 }
 
 
@@ -690,7 +758,7 @@ int i, fullscreen;
       glutGameModeString("1024x768:32@75");
       glutEnterGameMode();
    } else {
-      glutInitWindowSize (1024, 768);
+      glutInitWindowSize (screenWidth, screenHeight);
       glutCreateWindow (argv[0]);
    }
 
@@ -703,7 +771,8 @@ int i, fullscreen;
    glutReshapeFunc (reshape);
    glutDisplayFunc(display);
    glutKeyboardFunc (keyboard);
-   glutPassiveMotionFunc(motion);
+   glutPassiveMotionFunc(passivemotion);
+   glutMotionFunc(motion);
    glutMouseFunc(mouse);
    glutIdleFunc(update);
 
@@ -722,4 +791,35 @@ int i, fullscreen;
    skySize *= 1.5;
 }
 
+	/* functions to draw 2d images on screen */
+void draw2Dline(int x1, int y1, int x2, int y2, int lineWidth) {
+   glLineWidth(lineWidth);
+   glBegin(GL_LINES);
+      glVertex2i(x1, y1);
+      glVertex2i(x2, y2);
+   glEnd();
+   glLineWidth(1);
+}
+
+void draw2Dbox(int x1, int y1, int x2, int y2) {
+   glBegin(GL_QUADS);
+      glVertex2i(x1, y1);
+      glVertex2i(x1, y2);
+      glVertex2i(x2, y2);
+      glVertex2i(x2, y1);
+   glEnd();
+}
+
+void  draw2Dtriangle(int x1, int y1, int x2, int y2, int x3, int y3) {
+   glBegin(GL_TRIANGLES);
+      glVertex2i(x1, y1);
+      glVertex2i(x2, y2);
+      glVertex2i(x3, y3);
+   glEnd();
+}
+
+void  set2Dcolour(float colourv[]) {
+   glMaterialfv(GL_FRONT, GL_EMISSION, colourv);
+   glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colourv);
+}
 
