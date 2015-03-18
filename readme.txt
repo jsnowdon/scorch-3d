@@ -336,6 +336,36 @@ They will reflect the correct values when the display window is resized.
 End of Assignment 3 Instructions
 ========================================
 
+Additions and Changes for Assignment 4
+--------------------------------------
+
+Player Controls
+---------------
+Players can now be drawn. This is necessary to see other players in
+a networked game.  Players are gray with red eyes.
+
+The functions to control the players are identical to the mob control
+functions with the names changed to indicate they control players. 
+   void createPlayer(int number, float x, float y, float z, float roty);
+   void setPlayerPosition(int number, float x, float y, float z, float roty);
+   void hidePlayer(int number);
+   void showPlayer(int number);
+
+There is a example of a player drawn in the sample world.
+
+
+Space Flag Added
+----------------
+A variable named space has been added to the program. It is set equal
+to 1 when the space bar is pressed. You can use this to respond to
+the player pushing the space bar.
+
+Reset the variable to be equal to 0 once you have responded to the key press.
+
+
+========================================
+End of Assignment 4 Instructions
+========================================
 
 IMPORTANT NOTE
 --------------
@@ -407,21 +437,5 @@ Frames Per Second (FPS) Printing
 The FPS are no longer printed automatically. There is a -fps command
 line flag which turns this functionality one.
 
-
-
-Player Controls
----------------
-Players can now be drawn. This is necessary to see other players in
-a networked game.  Players look like the monsters from assignment 3 except
-they are gray with red eyes.
-
-The functions to control the players are identical to the mob control
-functions with the names changed to indicate they control players. 
-   void createPlayer(int number, float x, float y, float z, float roty);
-   void setPlayerPosition(int number, float x, float y, float z, float roty);
-   void hidePlayer(int number);
-   void showPlayer(int number);
-
-There is a sample player drawn in the sample world.
 
 

@@ -52,6 +52,8 @@ extern void showMob(int);
 	/* player controls */
 extern void createPlayer(int, float, float, float, float);
 extern void setPlayerPosition(int, float, float, float, float);
+extern void getPlayerPosition(int, float *, float *, float *, float *);
+extern void getOldPlayerPosition(int, float *, float *, float *, float *);
 extern void hidePlayer(int);
 extern void showPlayer(int);
 
@@ -68,8 +70,8 @@ extern int flycontrol;
 extern int testWorld;
 	/* flag to print out frames per second */
 extern int fps;
-	/* flag to indicate removal of cube the viewer is facing */
-extern int dig;
+	/* flag to indicate the space bar has been pressed */
+extern int space;
 	/* flag indicates the program is a client when set = 1 */
 extern int netClient;
 	/* flag indicates the program is a server when set = 1 */
@@ -87,6 +89,7 @@ extern void ExtractFrustum();
 extern void tree(float, float, float, float, float, float, int);
 
 /********* end of extern variable declarations **************/
+
 typedef struct _mobInfo{
   
   int drawMob;
@@ -107,6 +110,10 @@ int rightButton = 0;
 int reset = 0;
 int initialY;
 int initialX;
+int gravityFlag = 1;
+int networkMode = 0;
+int firstUpdate = 0;
+time_t old;
 
 /* setup server connections */
 int socketID, clientSocketID;
@@ -114,6 +121,13 @@ struct sockaddr_in server_addr; /* server address */
 struct sockaddr_in client_addr; /* client address */
 socklen_t addrlen = sizeof(client_addr);
 socklen_t server_addrlen = sizeof(server_addr);
+
+/* player A.I. */
+int searching = 1;
+int fighting = 0;
+int onRoute = 1;
+int headingNorth = 0, headingSouth = 0, headingEast = 0, headingWest = 0;
+int offTrailNorth = 0, offTrailSouth = 0, offTrailWest = 0, offTrailEast = 0;
 
 #define PORT_NUM 3333
 
@@ -166,49 +180,340 @@ void readClientMsg( int *bullet, int *mobID, int *drawMob, float *timeInMotion,
                  x_orient, y_orient, z_orient, gunAngle, gunVelocity);
 }
 
-   /*** collisionResponse() ***/
-   /* -performs collision detection and response */
-   /*  sets new xyz  to position of the viewpoint after collision */
-   /* -can also be used to implement gravity by updating y position of vp*/
-   /* note that the world coordinates returned from getViewPosition()
-      will be the negative value of the array indices */
-void collisionResponse() 
+/* a function to allow the player to jump 2 vertical square units */
+void jump()
 {
-
-   float x_cord;
-   float y_cord;
-   float z_cord;
-   static int fallSlowAgain = 0;
-
-   int x, y, z, i;
+   int x, y, z;
+   float x_cord, y_cord, z_cord;
 
    /* get the initial position */
    getViewPosition(&x_cord, &y_cord, &z_cord);
+
+   /* convert the cordinates to positive integers */
+   x = (int)x_cord * -1;
+   y = (int)y_cord * -1;
+   z = (int)z_cord * -1;
+
+   if ( world[x][y][z] == 0 && world[x][y+1][z] == 0 && world[x][y+2][z] == 0 && world[x][y+3][z] == 0 )
+   {
+      /* jump up 2 vertical squares */
+      setViewPosition(x_cord, y_cord - 3, z_cord);
+   }
+}
+
+/* this function checks if the given input puts the AI out of bounds */
+int AICheckBounds(int x, int y, int z)
+{
+   /* ensure the player is on the map */
+   if ( x < 2 || x > 98 || y < 4 || y > 47 || z < 2 || z > 98 )
+   {
+      return 0;
+   }
+
+   /* only returns 1 if A.I. is allowed to go there */
+   return 1;
+}
+
+/* this function will determine the north south obstical avoidance */
+void AINorthSouthDetection()
+{
+   float player_x_cord, player_y_cord, player_z_cord, player_roty = 0.0f;
+   int player_x, player_y, player_z, isInBounds1 = 0, isInBounds2 = 0;
+
+   /* the A.I. will need to go off route */
+   onRoute = 0;
+
+   /* try bypassing the obstical */
+   /* get the initial position */
+   getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+   /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+   player_x = (int)player_x_cord;
+   player_y = (int)player_y_cord;
+   player_z = (int)player_z_cord;
+
+      /* try going right 1 square */
+   if ( world[player_x+1][player_y][player_z] == 0 && (isInBounds1 = AICheckBounds(player_x+1, player_y, player_z)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord, player_roty );
+   }
+   else if ( world[player_x+1][player_y+1][player_z] == 0 && world[player_x+1][player_y+2][player_z] == 0
+             && (isInBounds1 = AICheckBounds(player_x+1, player_y+1, player_z)) == 1 && (isInBounds2 = AICheckBounds(player_x+1, player_y+2, player_z)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord + 1, player_z_cord, player_roty );
+   }
+
+   /* try going left 1 square */
+   else if ( world[player_x-1][player_y][player_z] == 0 && (isInBounds1 = AICheckBounds(player_x-1, player_y, player_z)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord, player_roty );
+   }
+   else if ( world[player_x-1][player_y+1][player_z] == 0 && world[player_x-1][player_y+2][player_z] == 0 
+             && (isInBounds1 = AICheckBounds(player_x-1, player_y+1, player_z)) == 1 && (isInBounds2 = AICheckBounds(player_x-1, player_y+2, player_z)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord + 1, player_z_cord, player_roty );
+   }
+
+   /* try going 1 right and 1 up (dyagonally 1) */
+   else if ( world[player_x+1][player_y][player_z+1] == 0 && (isInBounds1 = AICheckBounds(player_x+1, player_y, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord+1, player_roty );
+   }
+   else if ( world[player_x+1][player_y+1][player_z+1] == 0 && world[player_x+1][player_y+2][player_z+1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x+1, player_y+1, player_z+1)) == 1 && (isInBounds2 = AICheckBounds(player_x+1, player_y+2, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord + 1, player_z_cord + 1, player_roty );
+   }
+
+   /* try going 1 left and 1 up (dyagonally 1) */
+   else if ( world[player_x-1][player_y][player_z+1] == 0 && (isInBounds1 = AICheckBounds(player_x-1, player_y, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord + 1, player_roty );
+   }
+   else if ( world[player_x-1][player_y+1][player_z+1] == 0 && world[player_x-1][player_y+2][player_z+1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x-1, player_y+1, player_z+1)) == 1 && (isInBounds2 = AICheckBounds(player_x-1, player_y+2, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord + 1, player_z_cord + 1, player_roty );
+   }
+
+   /* try going 1 right and 1 down (dyagonally 1) */
+   else if ( world[player_x+1][player_y][player_z-1] == 0 && (isInBounds1 = AICheckBounds(player_x+1, player_y, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord-1, player_roty );
+   }
+   else if ( world[player_x+1][player_y+1][player_z-1] == 0 && world[player_x+1][player_y+2][player_z-1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x+1, player_y+1, player_z-1)) == 1 && (isInBounds2 = AICheckBounds(player_x+1, player_y+2, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord + 1, player_z_cord - 1, player_roty );
+   }
+
+   /* try going 1 left anf 1 down (dyagonally 1) */
+   else if ( world[player_x-1][player_y][player_z-1] == 0 && (isInBounds1 = AICheckBounds(player_x-1, player_y, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+   }
+   else if ( world[player_x-1][player_y+1][player_z-1] == 0 && world[player_x-1][player_y+2][player_z-1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x-1, player_y+1, player_z-1)) == 1 && (isInBounds2 = AICheckBounds(player_x-1, player_y+2, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord + 1, player_z_cord - 1, player_roty );
+   }
+
+   /* try going 1 back */
+   else if ( world[player_x][player_y][player_z-1] == 0 && (isInBounds1 = AICheckBounds(player_x, player_y, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord-1, player_roty );
+   }
+   else if ( world[player_x][player_y+1][player_z-1] == 0 && world[player_x][player_y+2][player_z-1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x, player_y+1, player_z-1)) == 1 && (isInBounds2 = AICheckBounds(player_x, player_y+2, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord + 1, player_z_cord - 1, player_roty );
+   } 
+
+   /* he must be stuck in a hole */
+   else
+   {
+      /* he must be stuck in a hole so restart A.I. from middle of map */
+      setPlayerPosition( 0, 50, 40, 50, 180.0);
+
+      /* initialize the A.I. to head south on route */
+      headingSouth = 1;
+      headingNorth = 0;
+      headingEast = 0;
+      headingWest = 0;
+      onRoute = 1;
+   }
+
+}
+
+/* this function will determine the east west obstical avoidance */
+void AIEastWestDetection()
+{
+   float player_x_cord, player_y_cord, player_z_cord, player_roty = 0.0f;
+   int player_x, player_y, player_z, isInBounds1 = 0, isInBounds2 = 0;
+
+   /* the A.I. will need to go off route */
+   onRoute = 0;
+
+   /* try bypassing the obstical */
+   /* get the initial position */
+   getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+   /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+   player_x = (int)player_x_cord;
+   player_y = (int)player_y_cord;
+   player_z = (int)player_z_cord;
+
+      /* try going right 1 square */
+   if ( world[player_x][player_y][player_z+1] == 0 && (isInBounds1 = AICheckBounds(player_x, player_y, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord + 1, player_roty );
+   }
+   else if ( world[player_x][player_y+1][player_z+1] == 0 && world[player_x][player_y+2][player_z+1] == 0
+             && (isInBounds1 = AICheckBounds(player_x, player_y+1, player_z+1)) == 1 && (isInBounds2 = AICheckBounds(player_x, player_y+2, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord + 1, player_z_cord + 1, player_roty );
+   }
+
+   /* try going left 1 square */
+   else if ( world[player_x][player_y][player_z-1] == 0 && (isInBounds1 = AICheckBounds(player_x, player_y, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord - 1, player_roty );
+   }
+   else if ( world[player_x][player_y+1][player_z-1] == 0 && world[player_x][player_y+2][player_z-1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x, player_y+1, player_z-1)) == 1 && (isInBounds2 = AICheckBounds(player_x, player_y+2, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord + 1, player_z_cord - 1, player_roty );
+   }
+
+   /* try going 1 right and 1 up (dyagonally 1) */
+   else if ( world[player_x+1][player_y][player_z+1] == 0 && (isInBounds1 = AICheckBounds(player_x+1, player_y, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord+1, player_roty );
+   }
+   else if ( world[player_x+1][player_y+1][player_z+1] == 0 && world[player_x+1][player_y+2][player_z+1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x+1, player_y+1, player_z+1)) == 1 && (isInBounds2 = AICheckBounds(player_x+1, player_y+2, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord + 1, player_z_cord + 1, player_roty );
+   }
+
+   /* try going 1 left and 1 up (dyagonally 1) */
+   else if ( world[player_x+1][player_y][player_z-1] == 0 && (isInBounds1 = AICheckBounds(player_x+1, player_y, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord - 1, player_roty );
+   }
+   else if ( world[player_x+1][player_y+1][player_z-1] == 0 && world[player_x+1][player_y+2][player_z-1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x+1, player_y+1, player_z-1)) == 1 && (isInBounds2 = AICheckBounds(player_x+1, player_y+2, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord + 1, player_y_cord + 1, player_z_cord - 1, player_roty );
+   }
+
+   /* try going 1 right and 1 down (dyagonally 1) */
+   else if ( world[player_x-1][player_y][player_z+1] == 0 && (isInBounds1 = AICheckBounds(player_x-1, player_y, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord + 1, player_roty );
+   }
+   else if ( world[player_x-1][player_y+1][player_z+1] == 0 && world[player_x-1][player_y+2][player_z+1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x-1, player_y+1, player_z+1)) == 1 && (isInBounds2 = AICheckBounds(player_x-1, player_y+2, player_z+1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord + 1, player_z_cord + 1, player_roty );
+   }
+
+   /* try going 1 left anf 1 down (dyagonally 1) */
+   else if ( world[player_x-1][player_y][player_z-1] == 0 && (isInBounds1 = AICheckBounds(player_x-1, player_y, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+   }
+   else if ( world[player_x-1][player_y+1][player_z-1] == 0 && world[player_x-1][player_y+2][player_z-1] == 0 
+             && (isInBounds1 = AICheckBounds(player_x-1, player_y+1, player_z-1)) == 1 && (isInBounds2 = AICheckBounds(player_x-1, player_y+2, player_z-1)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord + 1, player_z_cord - 1, player_roty );
+   } 
+
+   /* try going 1 back */
+   else if ( world[player_x-1][player_y][player_z] == 0 && (isInBounds1 = AICheckBounds(player_x-1, player_y, player_z)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord, player_roty );
+   }
+   else if ( world[player_x-1][player_y+1][player_z] == 0 && world[player_x-1][player_y+2][player_z] == 0 
+             && (isInBounds1 = AICheckBounds(player_x-1, player_y+1, player_z)) == 1 && (isInBounds2 = AICheckBounds(player_x-1, player_y+2, player_z)) == 1 )
+   {
+      setPlayerPosition(0, player_x_cord - 1, player_y_cord + 1, player_z_cord, player_roty );
+   }
+
+   /* he must be stuck in a hole */
+   else
+   {
+      /* he must be stuck in a hole so restart A.I. from middle of map */
+      setPlayerPosition( 0, 50, 40, 50, 180.0);
+
+      /* initialize the A.I. to head south on route */
+      headingSouth = 1;
+      headingNorth = 0;
+      headingEast = 0;
+      headingWest = 0;
+      onRoute = 1;
+   }
+
+}
+
+/* this function will deal with all the AI Collision Detection */
+void AICollisionDetection()
+{
+   /* if the A.I. is heading in the north or south directions */
+   if ( headingNorth == 1 || headingSouth == 1 )
+   {
+      AINorthSouthDetection();
+   }
+   /* if the A.I. is heading in the east or west directions */
+   else if ( headingEast == 1 || headingWest == 1 )
+   {
+      AIEastWestDetection();
+   }  
+
+}
+
+	/*** collisionResponse() ***/
+	/* -performs collision detection and response */
+	/*  sets new xyz  to position of the viewpoint after collision */
+	/* -can also be used to implement gravity by updating y position of vp*/
+	/* note that the world coordinates returned from getViewPosition()
+	   will be the negative value of the array indices */
+void collisionResponse() 
+{
+
+   float x_cord, y_cord, z_cord;
+   float player_x_cord, player_y_cord, player_z_cord, player_roty;
+
+   static int fallSlowAgain = 0;
+
+   int x, y, z, i;
+   int player_x, player_y, player_z;
+
+   /******** GET THE POSITIONS ******************/
+
+   /* get the initial positions */
+   getViewPosition(&x_cord, &y_cord, &z_cord);
+   getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
 
    /*convert the cordinates to positive integers */
    x = (int)x_cord * -1;
    y = (int)y_cord * -1;
    z = (int)z_cord * -1;
 
+   /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+   player_x = (int)player_x_cord;
+   player_y = (int)player_y_cord;
+   player_z = (int)player_z_cord;
+
+   /********** View Point ***************/
+
    /* ensure we are on the map */
    if ( x < 2 || x > 98 || y < 4 || y > 47 || z < 2 || z > 98 )
    {
-        getOldViewPosition(&x_cord, &y_cord, &z_cord);
-        setViewPosition(x_cord, y_cord, z_cord );
+      getOldViewPosition(&x_cord, &y_cord, &z_cord);
+      setViewPosition(x_cord, y_cord, z_cord );
    }
 
-   /* allow for climbing 1 block if needed */
+   /* ensure we are not in contact with the player */
+   if( x == player_x && y == player_y && z == player_z )
+   {
+      getOldViewPosition(&x_cord, &y_cord, &z_cord);
+      setViewPosition(x_cord, y_cord, z_cord );
+   }
+
+   /* allow for climbing 1 block or jump 2 blocks */
    if( world[x][y][z] != 0 )
    {
-      if( world[x][y+1][z] == 0 )
+      if( world[x][y+1][z] == 0 && world[x][y+2][z] == 0)
       {
           setViewPosition(x_cord, y_cord - 0.5, z_cord );
       }
       else
       {
-          getOldViewPosition(&x_cord, &y_cord, &z_cord);
-          setViewPosition(x_cord, y_cord, z_cord );
+         getOldViewPosition(&x_cord, &y_cord, &z_cord);
+         setViewPosition(x_cord, y_cord, z_cord );
       }
+
    }
 
    /* apply gravity */
@@ -217,8 +522,49 @@ void collisionResponse()
       setViewPosition(x_cord, y_cord + 1, z_cord );
    }
 
+   /*********** Player **************/
+
+   /* ensure the player is on the map */
+   if ( player_x < 2 || player_x > 98 || player_y < 4 || player_y > 47 || player_z < 2 || player_z > 98 )
+   {
+      getOldPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+      setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+   }
+
+   /* ensure the player cannont move to the viewpoints position */
+   if( x == player_x && y == player_y && z == player_z )
+   {
+      getOldPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+      setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+   }
+
+   /* allow the player to climb 1 block */
+   if( world[player_x][player_y][player_z] != 0 )
+   {
+      if( world[player_x][player_y+1][player_z] == 0 && world[player_x][player_y+2][player_z] == 0)
+      {
+         setPlayerPosition(0, player_x_cord, player_y_cord + 1, player_z_cord, player_roty );
+      }
+      else
+      {
+         getOldPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+         setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+
+         /* find a way around the obstical */
+         AICollisionDetection();
+      }
+
+   }
+
+   /* apply gravity */
+   if( world[player_x][player_y][player_z] == 0 && world[player_x][player_y-1][player_z] == 0 && player_y > 3 && fallSlowAgain%5 == 0)
+   {
+      setPlayerPosition(0, player_x_cord, player_y_cord - 1, player_z_cord, player_roty );
+   }
+
    fallSlowAgain++;
 }
+
 
 	/******* draw2D() *******/
 	/* draws 2D shapes on screen */
@@ -230,11 +576,12 @@ void collisionResponse()
 	/* colour must be set before other functions are called	*/
 void draw2D() {
 
-   float x_cord;
-   float y_cord;
-   float z_cord;
+   float x_cord, y_cord, z_cord;
+   float player_x_cord, player_y_cord, player_z_cord, player_roty;
    int x, y, z, i;
+   int player_x, player_y, player_z;
    int posX, posZ;
+   int player_posX, player_posZ;
    int x_topRight, x_bottomRight, z_topRight, z_bottomRight;
 
    if (testWorld) {
@@ -247,11 +594,14 @@ void draw2D() {
       GLfloat black[] = {0.0, 0.0, 0.0, 0.5};
       set2Dcolour(black);
       draw2Dbox(500, 380, 524, 388);
-   } 
+   }
    else
    {
+      GLfloat green[] = {0.0, 0.5, 0.0, 0.5};
       GLfloat red[] = {0.5,0.0,0.0,1.0};
-      set2Dcolour(red);
+
+      /* make viewpoint and viewpoint bullets green */
+      set2Dcolour(green);
 
       /* display the small map in the top right corner of the screen */
       if ( displayMap == 1 )
@@ -278,6 +628,8 @@ void draw2D() {
             }
          }
 
+         /********* VIEWPOINT **********/
+
          /* get the initial position */
          getViewPosition(&x_cord, &y_cord, &z_cord);
 
@@ -289,13 +641,36 @@ void draw2D() {
          posX = x_bottomRight + x *2;
          posZ = z_bottomRight + z *2;
 
-         /* draw user on mini map */
+         /* draw user on the mini map */
          draw2Dbox(posX-5, posZ-5, posX+5, posZ+5);
+
+         /********** A.I. ************/
+
+         /* make A.I. red */
+         set2Dcolour(red);
+
+         /* get the A.I. player's position */
+         getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+         /* convert the cordinates to integers */
+         player_x = (int)player_x_cord;
+         player_z = (int)player_z_cord;
+
+         /* get current position on mini map */
+         player_posX = x_bottomRight + player_x *2;
+         player_posZ = z_bottomRight + player_z *2;
+
+         /* draw A.I. on the mini map */
+         draw2Dbox(player_posX-5, player_posZ-5, player_posX+5, player_posZ+5);
+
+         /******** BACKGROUND ************/
 
          /* draw background for mini map */
          GLfloat black[] = {0.0, 0.0, 0.0, 0.5};
          set2Dcolour(black);
          draw2Dbox(x_bottomRight, z_bottomRight, x_topRight, z_topRight);
+
+         /********* EDGES **************/
 
          /* draw world edges */
          set2Dcolour(red);
@@ -334,6 +709,8 @@ void draw2D() {
             }
          }
 
+         /********* VIEWPOINT **********/
+
          /* get the initial position */
          getViewPosition(&x_cord, &y_cord, &z_cord);
 
@@ -345,13 +722,36 @@ void draw2D() {
          posX = x_bottomRight + x *5;
          posZ = z_bottomRight + z *5;
 
-         /* draw user on mini map */
+         /* draw user on the mini map */
          draw2Dbox(posX-5, posZ-5, posX+5, posZ+5);
+
+         /********** A.I. ************/
+
+         /* make A.I. red */
+         set2Dcolour(red);
+
+         /* get the A.I. player's position */
+         getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+         /* convert the cordinates to integers */
+         player_x = (int)player_x_cord;
+         player_z = (int)player_z_cord;
+
+         /* get current position on mini map */
+         player_posX = x_bottomRight + player_x *5;
+         player_posZ = z_bottomRight + player_z *5;
+
+         /* draw A.I. on the mini map */
+         draw2Dbox(player_posX-5, player_posZ-5, player_posX+5, player_posZ+5);
+
+         /******** BACKGROUND ************/
 
          /* draw background for mini map */
          GLfloat black[] = {0.0, 0.0, 0.0, 0.5};
          set2Dcolour(black);
          draw2Dbox(x_bottomRight, z_bottomRight, x_topRight, z_topRight);
+
+         /********* EDGES ************/
 
          /* draw world edges */
          set2Dcolour(red);
@@ -368,19 +768,18 @@ void draw2D() {
 
 }
 
-
 	/*** update() ***/
 	/* background process, it is called when there are no other events */
 	/* -used to control animations and perform calculations while the  */
 	/*  system is running */
 	/* -gravity must also implemented here, duplicate collisionResponse */
 void update() {
-
+   
    int i, j, k, x, y, z;
+   int player_x, player_y, player_z;
    float *la;
-   float x_cord;
-   float y_cord;
-   float z_cord;
+   float x_cord, y_cord, z_cord;
+   float player_x_cord, player_y_cord, player_z_cord, player_roty;
    static int fallSlow = 0;
    static int cloudx = 1, cloudz = 1;
    static int cloudx2 = 10, cloudz2 = 1;
@@ -437,104 +836,80 @@ void update() {
       if (mob1ry > 360.0) mob1ry -= 360.0;
     /* end testworld animation */
 
-   } 
+   }
    else
    {
-      /* if the server flag is set */
-      if ( netServer == 1 )
+      /* if network mode is on */
+      if ( networkMode == 1 )
       {
-
-         char msg[500000];
-         int index, drawMob, isBullet;
-         float timeInMotion, server_x, server_y, server_z, x_angle, y_angle;
-         float server_XCord, server_YCord, server_ZCord;
-         float server_XOrient, server_YOrient, server_ZOrient;
-         float gunAngle, gunVelocity;
-
-         /* read socket from server */
-         read(clientSocketID, &msg, sizeof(msg));
-
-         /* parse the msg */
-         readClientMsg( &isBullet, &index, &drawMob, &timeInMotion,
-                        &server_x, &server_y, &server_z,
-                        &x_angle, &y_angle, &server_XCord,
-                        &server_YCord, &server_ZCord, &server_XOrient, 
-                        &server_YOrient, &server_ZOrient, &gunAngle, &gunVelocity, msg);
-
-         if( isBullet == 1 )
+         /* if the server flag is set */
+         if ( netServer == 1 )
          {
-            bullet[index].drawMob = drawMob;
-            bullet[index].timeInMotion = timeInMotion;
-            bullet[index].x = server_x;
-            bullet[index].y = server_y;
-            bullet[index].z = server_z;
-            bullet[index].x_angle = x_angle;
-            bullet[index].y_angle = y_angle;
+            char msg[500000];
+            int index, drawMob, isBullet;
+            float timeInMotion, server_x, server_y, server_z, x_angle, y_angle;
+            float server_XCord, server_YCord, server_ZCord;
+            float server_XOrient, server_YOrient, server_ZOrient;
+            float gunAngle, gunVelocity;
+
+            /* read socket from server */
+            read(clientSocketID, &msg, sizeof(msg));
+
+            /* parse the msg */
+            readClientMsg( &isBullet, &index, &drawMob, &timeInMotion,
+                           &server_x, &server_y, &server_z,
+                           &x_angle, &y_angle, &server_XCord,
+                           &server_YCord, &server_ZCord, &server_XOrient, 
+                           &server_YOrient, &server_ZOrient, &gunAngle, &gunVelocity, msg);
+
+            if( isBullet == 1 )
+            {
+               bullet[index].drawMob = drawMob;
+               bullet[index].timeInMotion = timeInMotion;
+               bullet[index].x = server_x;
+               bullet[index].y = server_y;
+               bullet[index].z = server_z;
+               bullet[index].x_angle = x_angle;
+               bullet[index].y_angle = y_angle;
+            }
+
+            /* ensure we as the client are at the same location as the server */
+            setViewPosition(server_XCord, server_YCord, server_ZCord );
+
+            /* set our orientation to look down the barrel of the gun */
+            // 45 is straight
+            // 90 is up
+            // 0 is down
+
+            /* set globals */
+            angle = gunAngle;
+            velocity = gunVelocity;
+
+            if (gunAngle > 45.0)
+            {
+               gunAngle = gunAngle * -1;
+
+               setViewOrientation(server_XOrient, gunAngle, server_ZOrient);
+
+            }
+            else if ( gunAngle < 45.0)
+            {
+               gunAngle = gunAngle * -1;
+
+               setViewOrientation(server_XOrient, gunAngle, server_ZOrient);
+            }
+            else
+            {
+               setViewOrientation(server_XOrient, server_YOrient, server_ZOrient);
+            }
          }
-
-         /* ensure we as the client are at the same location as the server */
-         setViewPosition(server_XCord, server_YCord, server_ZCord );
-
-         /* set our orientation to look down the barrel of the gun */
-         //gunAngle = gunAngle * -1;
-         // 45 is straight
-         // 90 is up
-         // 0 is down
-
-         /* set globals */
-         angle = gunAngle;
-         velocity = gunVelocity;
-
-         if (gunAngle > 45.0)
+         /* if the client flag is set */
+         else if ( netClient = 1 )
          {
-            gunAngle = gunAngle * -1;
-
-            setViewOrientation(server_XOrient, gunAngle, server_ZOrient);
-
-         }
-         else if ( gunAngle < 45.0)
-         {
-            gunAngle = gunAngle * -1;
-
-            setViewOrientation(server_XOrient, gunAngle, server_ZOrient);
-         }
-         else
-         {
-            setViewOrientation(server_XOrient, server_YOrient, server_ZOrient);
+            /* tell server our position */
+            sendMsgToServer( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
          }
       }
-      /* if the client flag is set */
-      else if ( netClient = 1 )
-      {
-         /* tell server our position */
-         sendMsgToServer( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
-      }
-
-      static int firstUpdate = 0;
-      static struct timeval tval_oldTime;
-
-      struct timeval tval_curTime, tval_difference;
-
-      /* get the current time */
-      gettimeofday(&tval_curTime, NULL);
-
-      /* ensure that this function has been called at least once */
-      if ( firstUpdate != 0 )
-      {
-
-        /* get the time difference */
-        timersub(&tval_curTime, &tval_oldTime, &tval_difference);
-
-        /* if not enough time between updates dont update */
-        if( (long int)tval_difference.tv_sec < (60 * 5) )
-        {
-          return;
-        }
-      }
-
-      /* make sure to update the old time structure */
-      tval_oldTime.tv_sec = tval_curTime.tv_sec;
-      tval_oldTime.tv_usec = tval_curTime.tv_usec;
 
       /********************** CLOUDS *******************************************/
       if ( fallSlow%5 == 0 ) 
@@ -604,6 +979,722 @@ void update() {
 
       }
 
+      /******************* MOVING PLAYER ****************************/
+      /* if the player A.I. is searching for you */
+      if ( searching == 1 )
+      {      
+         /* if the player A.I. is on its predefined route */
+         if ( onRoute == 1  && fallSlow%10 == 0 )
+         {
+            /* Heading True North */
+            if( headingNorth == 1 && headingSouth == 0 && headingWest == 0 && headingEast == 0 )
+            {
+               /* get the initial position */
+               getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+               /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+               player_x = (int)player_x_cord;
+               player_y = (int)player_y_cord;
+               player_z = (int)player_z_cord;
+
+               /* A.I. is moving up the left hand side */
+               if( player_x == 5 )
+               {
+                  /* move player up 1 block */
+                  if ( player_z < 95 )
+                  {
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  /* change player direction */
+                  else if ( player_z == 95 )
+                  {
+                     /* rotate the player to face east */
+                     player_roty = 90.0f;
+
+                     /* set the new player position */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord, player_roty );
+
+                     /* now the A.I. player should head east */
+                     headingEast = 1;
+                     headingNorth = 0;
+                  }
+                  else
+                  {
+                     printf("Heading North, then East Error\n");
+                  }
+                  
+               }
+               /* A.I. is moving up the right hand side */
+               else if( player_x == 95 )
+               {
+                  /* move player up 1 block */
+                  if ( player_z < 95 )
+                  {
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  /* change player direction */
+                  else if ( player_z == 95 )
+                  {
+                     /* rotate the player to face west */
+                     player_roty = 90.0f * -1;
+
+                     /* set the new player position */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord, player_roty );
+                     
+                     /* now the A.I. player should head west */
+                     headingWest = 1;
+                     headingNorth = 0;
+                  }
+                  else
+                  {
+                     printf("Heading North, then West Error\n");
+                  }
+
+               }
+               else
+               {
+                  printf("Heading North Error\n");
+               }
+
+            }
+            /* Heading South */
+            else if ( headingNorth == 0 && headingSouth == 1 && headingWest == 0 && headingEast == 0 )
+            {
+               /* get the initial position */
+               getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+               /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+               player_x = (int)player_x_cord;
+               player_y = (int)player_y_cord;
+               player_z = (int)player_z_cord;
+
+               /* A.I. is moving down the middle of the map */
+               if( player_x == 50 )
+               {
+                  /* move player up 1 block */
+                  if ( player_z > 5 )
+                  {
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  /* change player direction randomly to head east or west */
+                  else if ( player_z == 5 )
+                  {
+                     /* randomly get a 0 or 1 */
+                     int choice = rand() % 2;
+
+                     /* if choice is 0 go West */
+                     if ( choice == 0 )
+                     {
+                        /* rotate the player to face west */
+                        player_roty = 90.0f * -1;
+
+                        /* set the new player position */
+                        setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord, player_roty );
+
+                        /* now the A.I. player should head east */
+                        headingWest = 1;
+                        headingSouth = 0;
+
+                     }
+                     /* if choice is 1 go East */
+                     else
+                     {
+                        /* rotate the player to face east */
+                        player_roty = 90.0f;
+
+                        /* set the new player position */
+                        setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord, player_roty );
+
+                        /* now the A.I. player should head east */
+                        headingEast = 1;
+                        headingSouth = 0;
+                     }
+
+                  }
+                  else
+                  {
+                     printf("Heading South, then East/West Error\n");
+                  }
+                  
+               }
+               else
+               {
+                  printf("Heading South Error\n");
+               }
+
+            }
+            /* Heading West */
+            else if ( headingNorth == 0 && headingSouth == 0 && headingWest == 1 && headingEast == 0 )
+            {
+               /* get the initial position */
+               getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+               /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+               player_x = (int)player_x_cord;
+               player_y = (int)player_y_cord;
+               player_z = (int)player_z_cord;
+
+               /* A.I. is moving along the bottom right hand side */
+               if( player_z == 5 )
+               {
+                  /* move player up 1 block */
+                  if ( player_x > 5 )
+                  {
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord, player_roty );
+                  }
+                  /* change player direction */
+                  else if ( player_x == 5 )
+                  {
+                     /* rotate the player to face north */
+                     player_roty = 0.0f;
+
+                     /* set the new player position */
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord + 1, player_roty );
+
+                     /* now the A.I. player should head north */
+                     headingWest = 0;
+                     headingNorth = 1;
+                  }
+                  else
+                  {
+                     /* should be heading east */
+                     /* rotate the player to face east */
+                     player_roty = 90.0f;
+
+                     /* now the A.I. player should head east */
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+                  
+               }
+               /* A.I. is moving along the top right hand side */
+               else if( player_z == 95 )
+               {
+                  /* move player up 1 block */
+                  if ( player_x > 50 )
+                  {
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord, player_roty );
+                  }
+                  /* change player direction */
+                  else if ( player_x == 50 )
+                  {
+                     /* rotate the player to face south */
+                     player_roty = 180.0f;
+
+                     /* set the new player position */
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord - 1, player_roty );
+                     
+                     /* now the A.I. player should head south */
+                     headingWest = 0;
+                     headingSouth = 1;
+                  }
+                  else
+                  {
+                     /* should be heading east */
+                     /* rotate the player to face east */
+                     player_roty = 90.0f;
+
+                     /* now the A.I. player should head east */
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+
+               }
+               else
+               {
+                  printf("Heading West Error\n");
+               }
+
+            }
+            /* Heading East */
+            else if ( headingNorth == 0 && headingSouth == 0 && headingWest == 0 && headingEast == 1 )
+            {
+               /* get the initial position */
+               getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+               /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+               player_x = (int)player_x_cord;
+               player_y = (int)player_y_cord;
+               player_z = (int)player_z_cord;
+
+               /* A.I. is moving along the top left hand side */
+               if( player_z == 95 )
+               {
+                  /* move player up 1 block */
+                  if ( player_x < 50 )
+                  {
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord, player_roty );
+                  }
+                  /* change player direction */
+                  else if ( player_x == 50 )
+                  {
+                     /* rotate the player to face south */
+                     player_roty = 180.0f;
+
+                     /* set the new player position */
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord - 1, player_roty );
+
+                     /* now the A.I. player should head south */
+                     headingEast = 0;
+                     headingSouth = 1;
+                  }
+                  else
+                  {
+                     /* should be heading west */
+                     /* rotate the player to face east */
+                     player_roty = 90.0f * -1;
+
+                     /* now the A.I. player should head east */
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+                  
+               }
+               /* A.I. is moving along the bottom right hand side */
+               else if( player_z == 5 )
+               {
+                  /* move player up 1 block */
+                  if ( player_x < 95 )
+                  {
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord, player_roty );
+                  }
+                  /* change player direction */
+                  else if ( player_x == 95 )
+                  {
+                     /* rotate the player to face north */
+                     player_roty = 0.0f;
+
+                     /* set the new player position */
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord + 1, player_roty );
+                     
+                     /* now the A.I. player should head north */
+                     headingEast = 0;
+                     headingNorth = 1;
+                  }
+                  else
+                  {
+                     /* should be heading west */
+                     /* rotate the player to face east */
+                     player_roty = 90.0f * -1;
+
+                     /* now the A.I. player should head east */
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+
+               }
+               else
+               {
+                  printf("Heading East Error\n");
+               }
+
+            }
+            /* the A.I. is stuck on the route */
+            else
+            {
+               printf("North %d, South %d, East %d, West %d\n", headingNorth, headingSouth, headingEast, headingWest);
+               printf("A.I. Stuck need to go of route\n");
+            }
+
+         }
+         /* player A.I. is not on predefined route */
+         else
+         {
+            /* get the initial position */
+            getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+            /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+            player_x = (int)player_x_cord;
+            player_y = (int)player_y_cord;
+            player_z = (int)player_z_cord;
+
+            if ( headingNorth == 1 )
+            {
+               if( player_x == 5 && player_z >= 5 && player_z <= 95 || player_x == 95 && player_z >= 5 && player_z <= 95 )
+               {
+                  /* the A.I. is back on route */
+                  onRoute = 1;
+                  headingNorth = 1;
+                  headingSouth = 0;
+                  headingEast = 0;
+                  headingWest = 0;
+               }
+               else if ( player_x < 5 )
+               {
+                  if ( player_z < 5 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  else if ( player_z > 5 && player_z < 95 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  /* we should be going east */
+                  else if ( player_z > 95 )
+                  {
+                     /* face east */
+                     player_roty = 90.0f;
+
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord - 1, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+               }
+               else if ( player_x > 5 && player_x < 50 )
+               {
+                  if ( player_z < 5 )
+                  {
+                     /* face west */
+                     player_roty = 90.0f * -1;
+
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord + 1, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+                  else if ( player_z > 5 && player_z < 95 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  /* we should be going east */
+                  else if ( player_z > 95 )
+                  {
+                     /* face east */
+                     player_roty = 90.0f;
+
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord - 1, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+               }
+               else if ( player_x == 50 )
+               {
+                  /* face south */
+                  player_roty = 180.0f;
+
+                  setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                  headingNorth = 0;
+                  headingSouth = 1;
+                  headingEast = 0;
+                  headingWest = 0;
+                  onRoute = 1;
+               }
+               else if ( player_x > 50 && player_x < 95 )
+               {
+                  if ( player_z < 5 )
+                  {
+                     /* face east */
+                     player_roty = 90.0f;
+
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord + 1, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+                  else if ( player_z > 5 && player_z < 95 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  /* we should be going east */
+                  else if ( player_z > 95 )
+                  {
+                     /* face west */
+                     player_roty = 90.0f * -1;
+
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+               }
+               else if ( player_x > 95 )
+               {
+                  if ( player_z < 5 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  else if ( player_z > 5 && player_z < 95 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  /* we should be going east */
+                  else if ( player_z > 95 )
+                  {
+                     /* face west */
+                     player_roty = 90.0f * -1;
+
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+               }
+
+            }
+            else if ( headingSouth == 1 )
+            {
+               if( player_x == 5 || player_x == 95 )
+               {
+                  /* face north */
+                  player_roty = 0.0f;
+
+                  setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                  onRoute = 1;
+                  headingNorth = 1;
+                  headingSouth = 0;
+                  headingEast = 0;
+                  headingWest = 0;
+               }
+               else if ( player_x < 5 )
+               {
+                  /* try to get back on track */
+                  setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord - 1, player_roty );
+               }
+               else if ( player_x > 5 && player_x < 50 )
+               {
+                  /* try to get back on track */
+                  setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord - 1, player_roty );
+               }
+               else if ( player_x == 50 )
+               {
+                  /* the A.I. is back on route */
+                  onRoute = 1;
+                  headingNorth = 0;
+                  headingSouth = 1;
+                  headingEast = 0;
+                  headingWest = 0;
+               }
+               else if ( player_x > 50 && player_x < 95 )
+               {
+                  /* try to get back on track */
+                  setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+               }
+               else if ( player_x > 95 )
+               {
+                  /* try to get back on track */
+                  setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+               }
+
+            }
+            else if ( headingWest == 1 )
+            {
+               if ( player_z == 5 && player_x < 50 || player_z == 95 && player_x >= 50 )
+               {
+                  /* we are back on track */
+                  onRoute = 1;
+                  headingNorth = 0;
+                  headingSouth = 0;
+                  headingEast = 0;
+                  headingWest = 1;
+               }
+               else if ( player_z < 5 )
+               {
+                  if ( player_x < 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  /* should be going east instead */
+                  else if ( player_x >= 50 )
+                  {
+                     /* face east */
+                     player_roty = 90.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+               }
+               else if ( player_z > 5 && player_z < 95 )
+               {
+                  if ( player_x < 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  else if ( player_x > 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  else if ( player_x == 50 )
+                  {
+                     /* face south */
+                     player_roty = 180.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 1;
+                     headingEast = 0;
+                     headingWest = 0;
+                     onRoute = 1;
+
+                  }
+               }
+               else if ( player_z > 95 )
+               {
+                  if ( player_x < 50 )
+                  {
+                     /* face east */
+                     player_roty = 90.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 1;
+                     headingWest = 0;
+                  }
+                  /* should be going west */
+                  else if ( player_x > 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  else if ( player_x == 50 )
+                  {
+                     /* face south */
+                     player_roty = 180.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 1;
+                     headingEast = 0;
+                     headingWest = 0;
+                     onRoute = 1;
+                  }
+               }
+            }
+            else if ( headingEast == 1 )
+            {
+               if ( player_z == 5 && player_x > 50 || player_z == 95 && player_x <= 50 )
+               {
+                  /* we are back on track */
+                  onRoute = 1;
+                  headingNorth = 0;
+                  headingSouth = 0;
+                  headingEast = 0;
+                  headingWest = 1;
+               }
+               else if ( player_z < 5 )
+               {
+                  /* should be going east instead */
+                  if ( player_x < 50 )
+                  {
+                      /* face west */
+                     player_roty = 90.0f * -1;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+                  else if ( player_x > 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  else if ( player_x == 50 )
+                  {
+                     /* face south */
+                     player_roty = 180.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 1;
+                     headingEast = 0;
+                     headingWest = 0;
+                     onRoute = 1;
+                  }
+               }
+               else if ( player_z > 5 && player_z < 95 )
+               {
+                  if ( player_x < 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord + 1, player_roty );
+                  }
+                  else if ( player_x > 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord - 1, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  else if ( player_x == 50 )
+                  {
+                     /* face south */
+                     player_roty = 180.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 1;
+                     headingEast = 0;
+                     headingWest = 0;
+                     onRoute = 1;
+
+                  }
+               }
+               else if ( player_z > 95 )
+               {
+                  if ( player_x < 50 )
+                  {
+                     /* try to get back on track */
+                     setPlayerPosition(0, player_x_cord + 1, player_y_cord, player_z_cord - 1, player_roty );
+                  }
+                  /* should be going west instead */
+                  else if ( player_x > 50 )
+                  {
+                     /* face east */
+                     player_roty = 90.0f * -1;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 0;
+                     headingEast = 0;
+                     headingWest = 1;
+                  }
+                  else if ( player_x == 50 )
+                  {
+                     /* face south */
+                     player_roty = 180.0f;
+
+                     setPlayerPosition(0, player_x_cord, player_y_cord, player_z_cord, player_roty );
+                     headingNorth = 0;
+                     headingSouth = 1;
+                     headingEast = 0;
+                     headingWest = 0;
+                     onRoute = 1;
+
+                  }
+               }
+
+            }
+         }
+      }
+      /* the A.I. is in fight mode */
+      else if ( searching == 0 )
+      {
+         // TODO 
+         // calculate stright line
+         // shoot bullet
+      }
+
+      /****************** BULLETS/PROJECTILES **************************/
       for ( i = 0; i < 5; i++)
       {
           if( bullet[i].drawMob == 1)
@@ -661,6 +1752,8 @@ void update() {
 
       /*********** GRAVITY AND COLISION DETECTION *******************/
 
+      /********* VIEWPOINT GRAVITY *****************/
+
       /* get the initial position */
       getViewPosition(&x_cord, &y_cord, &z_cord);
 
@@ -670,14 +1763,95 @@ void update() {
       z = (int)z_cord * -1;
 
       /* apply gravity */
-      if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0)
+      if( world[x][y][z] == 0 && world[x][y-1][z] == 0 && y > 3 && fallSlow%5 == 0 && gravityFlag == 1)
       {
          setViewPosition(x_cord, y_cord + 1, z_cord );
       }
 
+      /********* PLAYER GRAVITY *****************/
+
+      /* get the initial position */
+      getPlayerPosition(0, &player_x_cord, &player_y_cord, &player_z_cord, &player_roty);
+
+      /* convert the cordinates to integers, unlike getViewPosition they are already positive */
+      player_x = (int)player_x_cord;
+      player_y = (int)player_y_cord;
+      player_z = (int)player_z_cord;
+
+      /* apply gravity */
+      if( world[player_x][player_y][player_z] == 0 && world[player_x][player_y-1][player_z] == 0 && player_y > 3 && fallSlow%5 == 0 && gravityFlag == 1)
+      {
+         setPlayerPosition(0, player_x_cord, player_y_cord - 1, player_z_cord, player_roty );
+      }
+
       fallSlow++;
+
+      /********************** JUMPING *******************************/
+      if ( space == 1 )
+      {
+         time_t now;
+         double seconds;
+
+         /* ensure that this function has been called at least once */
+         if ( firstUpdate != 0 )
+         {
+            /* get the current time */
+            time(&now);
+
+            /* calculate the difference in time */
+            seconds = difftime(old, now);
+
+            /* only allow jump every 5 seconds */
+            if ( seconds < 5.0f * -1 )
+            {
+               /* jump 2 vertical square units */
+               jump();
+
+               /* reverse gravity so that the user feels like they have hangtime */
+               gravityFlag = 0;
+
+               /* set old time equal to new time */
+               old = now;
+            }
+         }
+         /* first time through, so get the time of first jump */
+         else
+         {
+            /* set firstUpdate flag */
+            firstUpdate = 1;
+
+            /* capture the time of inital jump */
+            time(&old);
+
+            /* jump 2 vertical square units */
+            jump();
+
+            /* reverse gravity so that the user feels like they have hangtime */
+            gravityFlag = 0;
+         }
+
+         /* unset the space bar 'pressed' flag */
+         space = 0;
+      }
+
+      /********************** JUMP HANGTIME ***************************************/
+      time_t now;
+      double seconds;
+
+      /* get the current time */
+      time(&now);
+
+      /* calculate the difference in time */
+      seconds = difftime(old, now);
+
+      /* reset gravity after 1 second hang time */
+      if ( seconds < 0.5f * -1 )
+      {
+         gravityFlag = 1;
+      }
    }
 }
+
 
 	/* called by GLUT when a mouse button is pressed or released */
 	/* -button indicates which button was pressed or released */
@@ -693,7 +1867,6 @@ void mouse(int button, int state, int x, int y) {
    int changedAngle = 0;
    static int mobID = 0;
 
-
    /* only allow 10 shots at once */
    if ( mobID >= 5)
    {
@@ -704,7 +1877,10 @@ void mouse(int button, int state, int x, int y) {
    {
         printf("left button - ");
 
-        if ( netClient == 1 )
+        /* if in network mode only allow the client to shoot a bullet,
+           if not in network mode allow user to shoot a bullet
+        */
+        if( netClient == 1 || networkMode == 0)
         {
            /* get the current mouse orientation */
            getViewOrientation(&x_orient, &y_orient, &z_orient);
@@ -728,10 +1904,14 @@ void mouse(int button, int state, int x, int y) {
            bullet[mobID].x_angle = mod_x;
            bullet[mobID].y_angle = mod_y;
 
-            /* send over the bullet information */
-            sendMsgToServer( 1, mobID, bullet[mobID].drawMob, bullet[mobID].timeInMotion,
+           /* only need to send message in networking mode */
+           if ( netClient == 1 )
+           {
+               /* send over the bullet information */
+               sendMsgToServer( 1, mobID, bullet[mobID].drawMob, bullet[mobID].timeInMotion,
                              bullet[mobID].x, bullet[mobID].y, bullet[mobID].z,
                              bullet[mobID].x_angle, bullet[mobID].y_angle );
+           }
         }
    }
    else if (button == GLUT_MIDDLE_BUTTON)
@@ -743,41 +1923,49 @@ void mouse(int button, int state, int x, int y) {
    {
       printf("right button - ");
 
-      if( netClient == 1 )
+      /* if in network mode only allow the client to move cannon,
+         if not in network mode allow user to move cannon
+      */
+      if( netClient == 1 || networkMode == 0)
       {
          /* decrease the velocity */
          if( button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN )
          {
-             initialY = y;
-             initialX = x;
-             printf("xy before: %d,%d\n",x,y );
+            initialY = y;
+            initialX = x;
+            printf("xy before: %d,%d\n",x,y );
          }
          if( button == GLUT_RIGHT_BUTTON && state == GLUT_UP )
          {
-           printf("xy after: %d,%d\n",x,y );
+            printf("xy after: %d,%d\n",x,y );
          }
 
-         if( x < initialX && velocity >= 0.005 && velocity <= 1.00 ){
+         if( x < initialX && velocity >= 0.005 && velocity <= 1.00 )
+         {
             velocity = velocity - 0.005;
             printf("left:%lf m/s\n", velocity );
          }
 
-         else if( x > initialX && velocity <= 0.995 && velocity >= 0.00 ){
+         else if( x > initialX && velocity <= 0.995 && velocity >= 0.00 )
+         {
             velocity = velocity + 0.005;
             printf("right:%lf m/s\n", velocity );
          }
 
-         if( y < initialY && angle <= 89.00 && angle >= 0.00 ){
+         if( y < initialY && angle <= 89.00 && angle >= 0.00 )
+         {
             angle = angle + 5.0;
             printf("up:%lf degrees\n", angle);
          }
 
-         else if( y > initialY && angle >= 1.00 && angle <= 90.00 ){
+         else if( y > initialY && angle >= 1.00 && angle <= 90.00 )
+         {
             angle = angle - 5.0;
             printf("down:%lf degrees\n", angle );
          }
 
-         if ( netClient = 1 )
+         /* only need to send message in networking mode */
+         if ( netClient == 1 )
          {
             /* tell server our new angle */
             sendMsgToServer( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
@@ -856,6 +2044,7 @@ double turbulence(double x, double y, double z, double size)
 /********* End of Perlin Noise Functions *****************/
 
 
+
 int main(int argc, char** argv)
 {
 int i, j, k, l;
@@ -907,11 +2096,92 @@ int i, j, k, l;
 	/* create sample player */
       createPlayer(0, 52.0, 27.0, 52.0, 0.0);
 
-   } 
-  /* code for world */
-  else
-  {
+   }
+   /* check if networking is off */
+   else if ( netServer == 0 && netClient == 0)
+   {
+      /* start creating the world */
+      float randomNoise;
    
+      /* Initialize the world as empty */
+      for(i = 0; i < WORLDX; i++)
+      {
+         for(j = 0; j < WORLDY; j++)
+         {
+            for(k = 0; k < WORLDZ; k++)
+            {
+               world[i][j][k] = 0;
+            }
+         } 
+      }
+
+      /* Create the ground */
+      for(i = 0; i < WORLDX; i++) 
+      {
+         for(j = 0; j < WORLDZ; j++) 
+         {
+               world[i][3][j] = 8;
+         }
+      }
+
+      /* create some random noise */
+      generateNoise();
+    
+      int noiseReturn = 0;
+      double t;
+      time_t now;
+      int x, y;
+               
+      /* Create world using Perlin noise algo */
+      for(i = 0; i < WORLDX; i++) 
+      {
+          now = time(0);
+
+          for(j = 0; j < WORLDZ; j++)
+          {
+              /* create the noise for the landscape */
+              noiseReturn = (int)(turbulence(i, j, t, 32) / 4) - 13;
+
+              /* make sure no mountains touch any clouds */
+              if(noiseReturn >= 48)
+              {
+                  noiseReturn = 47;
+              }
+
+              /* populate the world */
+              world[i][noiseReturn][j] = 1;
+              
+              /* fill in the gaps below the cube */
+              if(noiseReturn > 3)
+              {
+                  for( l = 3; l < noiseReturn; l++ )
+                  {
+                      world[i][l][j] = 1;
+                  }
+              }
+
+              /* get the time */
+              t = now / 40.0;
+          }
+      }
+
+      /* create an A.I. opponent */
+      createPlayer(0, 50.0, 40.0, 50.0, 180.0);
+
+      /* initialize the A.I. to head south on route */
+      headingSouth = 1;
+      headingNorth = 0;
+      headingEast = 0;
+      headingWest = 0;
+      onRoute = 1;
+
+   }
+   /* networking on */
+   else
+   {
+      /* set network mode flag to true */
+      networkMode = 1;
+
       if ( netServer == 1 )
       {
          /* start creating the world */
@@ -1060,13 +2330,22 @@ int i, j, k, l;
             } 
          }
       }
+
+      /* create an A.I. opponent */
+      createPlayer(0, 50.0, 40.0, 50.0, 0.0);
    }
 
-	/* starts the graphics processing loop */
-	/* code after this will not run until the program exits */
+   /* starts the graphics processing loop */
+   /* code after this will not run until the program exits */
    glutMainLoop();
-   /* close socket when game exits */
-   close( socketID );
+
+   /* only close the socket if the networking was on */
+   if( networkMode == 1 )
+   {
+      /* close socket when game exits */
+      close( socketID );
+   }
+
    return 0; 
 }
 

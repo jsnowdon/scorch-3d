@@ -42,8 +42,6 @@ extern int displayList[MAX_DISPLAY_LIST][3];
 extern int displayCount;
 	/* flag to print out frames per second */
 extern int fps;
-	/* flag to indicate removal of cube the viewer is facing */
-extern int dig;
 	/* flag indicates the program is a client when set = 1 */
 extern int netClient;
 	/* flag indicates the program is a server when set = 1 */
